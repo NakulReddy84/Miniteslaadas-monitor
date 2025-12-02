@@ -1,0 +1,4 @@
+websockets
+numpy
+opencv-python-headless
+ultralytics
