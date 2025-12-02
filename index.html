@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADAS TTC Monitor</title>
+    <!-- Defer loading of Tailwind to ensure content is parsed first -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        /* Custom styles for a dark, professional look */
+        body {
+            background-color: #1f2937; /* Gray-800 */
+            color: #f3f4f6; /* Gray-100 */
+            font-family: 'Inter', sans-serif;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            padding: 2rem;
+        }
+        .monitor-area {
+            position: relative;
+            background-color: #0f172a; /* Slate-900 */
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            /* Use a fixed aspect ratio for stability */
+            aspect-ratio: 4/3; 
+        }
+        #video-feed {
+            display: none; /* Hidden video element, we draw to canvas */
+        }
+        #canvas-feed {
+            width: 100%;
+            height: 100%;
+            display: block;
+            background-color: #000;
+        }
+        .status-box {
+            background-color: #374151; /* Gray-700 */
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        /* --- Dynamic Risk Message Styling --- */
+
+        #risk-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 1rem 2rem;
+            border-radius: 1rem;
+            font-size: 2.5rem;
+            font-weight: 900;
+            text-align: center;
+            z-index: 20;
+            opacity: 0; /* Hidden by default */
+            transition: opacity 0.3s ease;
+            pointer-events: none; /* Ensures clicks go through to the video */
+            width: 90%;
+            max-width: 800px;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Warning (Yellow) - Flashing */
+        .risk-warning {
+            color: #fcd34d; /* Amber-300 */
+            border: 5px solid #d97706; /* Amber-700 */
+            background-color: rgba(251, 191, 36, 0.3); /* Amber-400 with alpha */
+            animation: pulse-yellow 0.5s infinite alternate;
+            opacity: 1 !important;
+        }
+
+        /* Critical (Red) - High Visibility */
+        .risk-critical {
+            color: #fee2e2; /* Red-100 */
+            border: 8px solid #b91c1c; /* Red-700 */
+            background-color: rgba(239, 68, 68, 0.7); /* Red-500 with alpha */
+            animation: pulse-red 0.3s infinite alternate;
+            opacity: 1 !important;
+        }
+        
+        /* Safe (Green) - Calm, Subtle */
+        .risk-safe {
+            color: #a7f3d0; /* Emerald-200 */
+            border: 3px solid #065f46; /* Emerald-800 */
+            background-color: rgba(16, 185, 129, 0.1); /* Emerald-500 with alpha */
+            opacity: 1 !important;
+        }
+
+        /* CSS Keyframes for Flashing/Pulsing */
+        @keyframes pulse-yellow {
+            from { box-shadow: 0 0 15px rgba(251, 191, 36, 1); }
+            to { box-shadow: 0 0 25px rgba(251, 191, 36, 0.5); }
+        }
+        @keyframes pulse-red {
+            from { transform: translate(-50%, -50%) scale(1.0); box-shadow: 0 0 30px rgba(239, 68, 68, 1); }
+            to { transform: translate(-50%, -50%) scale(1.02); box-shadow: 0 0 40px rgba(239, 68, 68, 0.7); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container flex flex-col lg:flex-row gap-8">
+    
+    <!-- Video Feed and Canvas (Main Content) -->
+    <div class="lg:w-3/4 monitor-area">
+        <video id="video-feed" autoplay playsinline></video>
+        <canvas id="canvas-feed"></canvas>
+        
+        <!-- DYNAMIC RISK MESSAGE (Centered) -->
+        <div id="risk-message" class="transition-all duration-300">
+            <!-- Content will be injected by JS -->
+        </div>
+
+    </div>
+    
+    <!-- Controls and Status Sidebar -->
+    <div class="lg:w-1/4 flex flex-col gap-4">
+        <h1 class="text-3xl font-extrabold text-blue-400 mb-4">ADAS Monitor</h1>
+        
+        <!-- Connection Status -->
+        <div class="status-box">
+            <h2 class="text-xl font-semibold mb-2 text-blue-300">Connection Status</h2>
+            <p id="ws-status" class="text-yellow-400 font-medium">Connecting to Server...</p>
+        </div>
+
+        <!-- System Info -->
+        <div class="status-box">
+            <h2 class="text-xl font-semibold mb-2 text-blue-300">System Info</h2>
+            <p><span class="font-bold">Model:</span> <span id="model-info" class="text-sm text-gray-400">N/A</span></p>
+            <p><span class="font-bold">User:</span> <span id="user-id-display" class="text-sm text-gray-400">N/A</span></p>
+            <p><span class="font-bold">Frame Rate:</span> <span id="fps-counter">0 FPS</span></p>
+            <p><span class="font-bold">Objects:</span> <span id="object-count">0</span></p>
+        </div>
+        
+        <!-- CLOSEST OBJECT MONITOR (DEBUG) -->
+        <div class="status-box">
+            <h2 class="text-xl font-semibold mb-2 text-red-300">Closest Object Monitor</h2>
+            <p><span class="font-bold">TTC (sec):</span> <span id="closest-ttc" class="font-mono text-lg text-gray-300">N/A</span></p>
+            <!-- Added Speed Display -->
+            <p><span class="font-bold">Speed:</span> <span id="closest-speed" class="font-mono text-lg text-gray-300">N/A</span></p>
+            <p><span class="font-bold">Risk Level:</span> <span id="closest-risk" class="font-bold text-lg text-gray-300">N/A</span></p>
+        </div>
+
+        <!-- TTC Thresholds INPUTS -->
+        <div class="status-box">
+            <h2 class="text-xl font-semibold mb-2 text-blue-300">Set TTC Thresholds (s)</h2>
+            <div class="flex justify-between items-center mb-2">
+                <label for="critical-input" class="text-red-400 font-bold">Critical (s):</label>
+                <input type="number" id="critical-input" value="1.5" step="0.1" min="0.1" class="w-20 bg-gray-700 text-white p-1 rounded">
+            </div>
+            <div class="flex justify-between items-center mb-2">
+                <label for="warning-input" class="text-yellow-400 font-bold">Warning (s):</label>
+                <input type="number" id="warning-input" value="3.0" step="0.1" min="0.5" class="w-20 bg-gray-700 text-white p-1 rounded">
+            </div>
+            <div class="flex justify-between items-center mb-4 text-xs text-gray-400">
+                <span>Current: <span id="crit-threshold">1.5</span>s / <span id="warn-threshold">3.0</span>s</span>
+            </div>
+            <button id="save-settings-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg transition duration-200 shadow-md">
+                Save & Apply
+            </button>
+            <p id="save-status-msg" class="text-xs text-gray-400 mt-2 text-center">Defaults loaded.</p>
+        </div>
+        
+        <!-- Controls -->
+        <button id="start-button" class="bg-gray-500 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md mb-2" disabled>
+            Awaiting Server Config...
+        </button>
+        <button id="stop-button" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md active:scale-95" disabled>
+            Stop Camera
+        </button>
+
+    </div>
+</div>
+
+<!-- Main JavaScript Logic and Firebase Integration -->
+<script type="module">
+    // --- Firebase Imports ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    
+    // --- Global Variables ---
+    const WS_URL = "wss://miniteslaadas-monitor.onrender.com";
+    const VIDEO_FPS = 10; 
+    
+    let ws = null;
+    let stream = null;
+    let audioContext = null; 
+    let isSending = false;
+    let currentDetections = [];
+    let serverConfig = { width: 640, height: 480 }; 
+    let firebaseReady = false;
+    let db, auth, userId;
+    let animationFrameId = null;
+    let frameCount = 0;
+    let lastFpsUpdateTime = performance.now();
+
+    // --- DOM Elements ---
+    const video = document.getElementById('video-feed');
+    const canvas = document.getElementById('canvas-feed');
+    const ctx = canvas.getContext('2d');
+    const wsStatusEl = document.getElementById('ws-status');
+    const startButton = document.getElementById('start-button');
+    const stopButton = document.getElementById('stop-button');
+    const saveSettingsBtn = document.getElementById('save-settings-btn');
+    const saveStatusMsg = document.getElementById('save-status-msg');
+    const closestTtcEl = document.getElementById('closest-ttc'); 
+    const closestRiskEl = document.getElementById('closest-risk'); 
+    const closestSpeedEl = document.getElementById('closest-speed'); // Added
+    const critInput = document.getElementById('critical-input');
+    const warnInput = document.getElementById('warning-input');
+    const critThresholdDisplay = document.getElementById('crit-threshold');
+    const warnThresholdDisplay = document.getElementById('warn-threshold');
+    const fpsCounterEl = document.getElementById('fps-counter');
+    const objectCountEl = document.getElementById('object-count');
+    const riskMessageEl = document.getElementById('risk-message');
+    const modelInfoEl = document.getElementById('model-info');
+    const userIdDisplay = document.getElementById('user-id-display');
+
+    // --- Audio Logic ---
+    function playTone(freq, duration, type = 'sine', gainValue = 0.5) {
+        if (!audioContext || audioContext.state === 'closed') {
+            return;
+        }
+        
+        // Ensure audio context is running
+        if (audioContext.state !== 'running') {
+            audioContext.resume().catch(e => console.error("Failed to resume AudioContext during tone play:", e));
+        }
+
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(gainValue, audioContext.currentTime);
+        
+        // Fade out
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + duration);
+    }
+
+    // --- Utility Functions ---
+
+    function canvasToBase64(canvas) {
+        const dataURL = canvas.toDataURL('image/jpeg', 0.8); 
+        return dataURL.split(',')[1];
+    }
+    
+    // Determines the highest risk present across all detected objects
+    function getHighestRisk(detections) {
+        if (detections.some(d => d.risk === 'Critical')) return 'Critical';
+        if (detections.some(d => d.risk === 'Warning')) return 'Warning';
+        return 'Safe';
+    }
+    
+    function updateRiskDisplay(highestRisk) {
+        const messageClassMap = {
+            'Critical': 'risk-critical',
+            'Warning': 'risk-warning',
+            'Safe': 'risk-safe'
+        };
+
+        const messageTextMap = {
+            'Critical': 'HIGH RISK COLLISION ALERT! DRIVER INTERVENTION NEEDED.',
+            'Warning': 'COLLISION ALERT! ATTENTION REQUIRED.',
+            'Safe': 'SAFE. DRIVE SLOWLY AND WATCH OUT FOR STRAY ANIMALS.'
+        };
+        
+        riskMessageEl.className = 'transition-all duration-300';
+        
+        if (highestRisk === 'Safe' && currentDetections.length === 0) {
+            riskMessageEl.style.opacity = '0';
+            return;
+        }
+
+        riskMessageEl.classList.add(messageClassMap[highestRisk]);
+        riskMessageEl.innerHTML = messageTextMap[highestRisk];
+
+        // Trigger audio alerts based on risk
+        if (highestRisk === 'Critical') {
+            playTone(800, 0.15, 'square', 0.7); 
+        } else if (highestRisk === 'Warning') {
+            playTone(500, 0.25, 'sine', 0.4);
+        }
+    }
+
+    function updateClosestObjectDebug() {
+        if (currentDetections.length === 0) {
+            closestTtcEl.textContent = 'N/A';
+            closestRiskEl.textContent = 'N/A';
+            closestSpeedEl.textContent = 'N/A';
+            closestRiskEl.classList.remove('text-red-400', 'text-yellow-400', 'text-green-400');
+            closestRiskEl.classList.add('text-gray-300');
+            return;
+        }
+
+        const closestDetection = currentDetections.reduce((min, d) => (d.ttc < min.ttc ? d : min), currentDetections[0]);
+        
+        const ttcDisplay = closestDetection.ttc === 999.0 ? 'Safe' : closestDetection.ttc.toFixed(2);
+        
+        closestTtcEl.textContent = ttcDisplay;
+        
+        // ADDED: Display Speed in sidebar
+        if (closestDetection.speed_mph) {
+             closestSpeedEl.textContent = closestDetection.speed_mph.toFixed(1) + " MPH";
+        } else {
+             closestSpeedEl.textContent = "0.0 MPH";
+        }
+
+        closestRiskEl.textContent = closestDetection.risk;
+
+        // FIX: Manually clear all color classes before applying the new one
+        const colorClasses = ['text-red-400', 'text-yellow-400', 'text-green-400', 'text-gray-300'];
+        closestRiskEl.classList.remove(...colorClasses);
+        
+        // Apply dynamic styling based on the closest object's risk
+        if (closestDetection.risk === 'Critical') {
+            closestRiskEl.classList.add('font-bold', 'text-lg', 'text-red-400');
+        } else if (closestDetection.risk === 'Warning') {
+            closestRiskEl.classList.add('font-bold', 'text-lg', 'text-yellow-400');
+        } else {
+            closestRiskEl.classList.add('font-bold', 'text-lg', 'text-green-400');
+        }
+    }
+
+    function drawDetections() {
+        // Redraw the video frame first (mirroring it for a selfie-view)
+        
+        ctx.save();
+        ctx.scale(-1, 1);
+        // FIX: Ensure drawing uses the correct configured resolution to prevent zoom/stretch
+        ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, -serverConfig.width, 0, serverConfig.width, serverConfig.height);
+        ctx.restore();
+        
+        currentDetections.forEach(d => {
+            const [x1_r, y1, x2_r, y2] = d.bbox;
+            const x1 = serverConfig.width - x2_r;
+            const x2 = serverConfig.width - x1_r;
+            let color;
+            if (d.risk === 'Critical') { color = '#F87171'; } 
+            else if (d.risk === 'Warning') { color = '#FBBF24'; } 
+            else { color = '#34D399'; }
+
+            // Draw Bounding Box
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.rect(x1, y1, x2 - x1, y2 - y1);
+            ctx.stroke();
+
+            // Draw label background and text
+            const ttcStr = d.ttc === 999.0 ? 'Safe' : d.ttc.toFixed(1) + 's';
+            const speedStr = d.speed_mph ? ` | ${d.speed_mph.toFixed(1)} MPH` : '';
+            
+            // ADDED: Speed in label text
+            const labelText = `${d.label}${speedStr} | TTC: ${ttcStr} | ${d.risk}`; 
+            
+            ctx.font = '16px Inter, sans-serif';
+            
+            const textMetrics = ctx.measureText(labelText);
+            const textWidth = textMetrics.width;
+            const textHeight = 20;
+            
+            const labelY = y1 > textHeight ? y1 - textHeight : y2 + 2; 
+
+            ctx.fillStyle = color;
+            ctx.fillRect(x1, labelY - 2, textWidth + 10, textHeight + 2);
+            
+            ctx.fillStyle = '#1f2937';
+            ctx.fillText(labelText, x1 + 5, labelY + 14); 
+        });
+
+        const highestRisk = getHighestRisk(currentDetections);
+        updateRiskDisplay(highestRisk);
+        
+        objectCountEl.textContent = currentDetections.length;
+    }
+    
+    function sendFrame() {
+        if (ws && ws.readyState === WebSocket.OPEN && isSending && video.readyState >= 2) {
+            
+            ctx.drawImage(video, 0, 0, serverConfig.width, serverConfig.height);
+            const base64Data = canvas.toDataURL('image/jpeg', 0.8);
+            
+            const frameMessage = {
+                type: 'frame',
+                data: base64Data,
+                timestamp: Date.now()
+            };
+            
+            try {
+                ws.send(JSON.stringify(frameMessage));
+            } catch (e) {
+                console.error("Failed to send frame:", e);
+            }
+        }
+    }
+    
+    function animationLoop(timestamp) {
+        if (isSending) {
+            // Update FPS counter logic
+            frameCount++;
+            const elapsed = timestamp - lastFpsUpdateTime;
+            if (elapsed >= 1000) {
+                const fps = Math.round((frameCount / elapsed) * 1000);
+                fpsCounterEl.textContent = `${fps} FPS`;
+                frameCount = 0;
+                lastFpsUpdateTime = timestamp;
+            }
+
+            drawDetections();
+        }
+        
+        animationFrameId = requestAnimationFrame(animationLoop);
+    }
+    
+    function sendFrameLoop() {
+        if (isSending) {
+            sendFrame();
+            setTimeout(sendFrameLoop, 1000 / VIDEO_FPS);
+        }
+    }
+
+    // --- Persistence Logic ---
+    
+    function getSettingsRef() {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // Path: /artifacts/{appId}/users/{userId}/settings/adas_config
+        return doc(db, `artifacts/${appId}/users/${userId}/settings`, 'adas_config');
+    }
+    
+    function updateClientUI(settings) {
+        // Update input fields
+        critInput.value = settings.critical_ttc.toFixed(1);
+        warnInput.value = settings.warning_ttc.toFixed(1);
+
+        // Update display thresholds
+        critThresholdDisplay.textContent = settings.critical_ttc.toFixed(1);
+        warnThresholdDisplay.textContent = settings.warning_ttc.toFixed(1);
+    }
+    
+    function sendSettingsToServer(settings) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            const payload = {
+                type: "SETTINGS_UPDATE",
+                critical: parseFloat(settings.critical_ttc),
+                warning: parseFloat(settings.warning_ttc)
+            };
+            ws.send(JSON.stringify(payload));
+            saveStatusMsg.textContent = 'Settings saved and applied instantly.';
+        } else {
+            saveStatusMsg.textContent = 'Settings saved to cloud. Apply on next connection.';
+        }
+    }
+    
+    window.saveUserSettings = async function() {
+        if (!firebaseReady) {
+            saveStatusMsg.textContent = 'Warning: Persistence inactive. Settings applied locally only.';
+            // Fallback: Apply local UI values
+            sendSettingsToServer({
+                critical_ttc: parseFloat(critInput.value),
+                warning_ttc: parseFloat(warnInput.value)
+            });
+            return;
+        }
+
+        const critical = parseFloat(critInput.value);
+        const warning = parseFloat(warnInput.value);
+        
+        if (critical >= warning) {
+            saveStatusMsg.textContent = 'Error: Critical TTC must be less than Warning TTC.';
+            return;
+        }
+
+        const newSettings = {
+            critical_ttc: critical,
+            warning_ttc: warning,
+            timestamp: Date.now()
+        };
+
+        try {
+            await setDoc(getSettingsRef(), newSettings, { merge: true });
+            // The onSnapshot listener will handle updating the UI and sending to the server
+        } catch (e) {
+            console.error("Error saving settings:", e);
+            saveStatusMsg.textContent = 'Error saving settings to Firebase.';
+        }
+    }
+
+    function setupSettingsListener() {
+        if (!firebaseReady || !userId) return;
+
+        onSnapshot(getSettingsRef(), (docSnap) => {
+            const defaults = { critical_ttc: 1.5, warning_ttc: 3.0 };
+            
+            if (docSnap.exists()) {
+                const settings = docSnap.data();
+                
+                // Validate data integrity
+                if (settings.critical_ttc && settings.warning_ttc && settings.critical_ttc < settings.warning_ttc) {
+                    updateClientUI(settings);
+                    sendSettingsToServer(settings);
+                    saveStatusMsg.textContent = 'Loaded valid settings.';
+                    return;
+                }
+            }
+            
+            // If doc doesn't exist or data is invalid, load defaults and send them
+            updateClientUI(defaults);
+            sendSettingsToServer(defaults);
+            saveStatusMsg.textContent = docSnap.exists() ? 'Loaded valid settings.' : 'Using default thresholds.';
+
+        }, (error) => {
+            console.error("Error setting up Firestore listener:", error);
+            saveStatusMsg.textContent = 'Failed to load settings.';
+        });
+    }
+
+    // --- WebSocket and Camera Logic ---
+
+    window.connectWebSocket = function() {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+        if (ws) ws.close();
+
+        ws = new WebSocket(WS_URL);
+
+        ws.onopen = () => {
+            wsStatusEl.classList.remove('text-red-400', 'text-yellow-400');
+            wsStatusEl.classList.add('text-green-400');
+            wsStatusEl.textContent = 'Connected (Awaiting Config)';
+            
+            // Send current UI values (which reflect loaded Firebase/defaults) to the Python server
+            sendSettingsToServer({
+                critical_ttc: parseFloat(critInput.value),
+                warning_ttc: parseFloat(warnInput.value)
+            });
+            
+            // Configuration is now considered ready for user interaction
+            startButton.disabled = false;
+            startButton.textContent = 'Start Camera & ADAS Monitoring';
+            startButton.classList.remove('bg-gray-500', 'bg-orange-500');
+            startButton.classList.add('bg-green-500', 'hover:bg-green-600');
+            wsStatusEl.textContent = 'Connected (Ready)';
+        };
+        
+        ws.onerror = (error) => {
+            wsStatusEl.classList.remove('text-green-400', 'text-yellow-400');
+            wsStatusEl.classList.add('text-red-400');
+            wsStatusEl.textContent = 'Connection Error (Is Server Running?)';
+            console.error("WebSocket error:", error);
+            
+            startButton.disabled = false;
+            startButton.textContent = 'Connection Failed (Click to Retry)';
+            startButton.classList.remove('bg-green-500');
+            startButton.classList.add('bg-orange-500', 'hover:bg-orange-600');
+        };
+        
+        ws.onclose = () => { 
+            wsStatusEl.classList.remove('text-green-400', 'text-yellow-400');
+            wsStatusEl.classList.add('text-red-400');
+            wsStatusEl.textContent = 'Disconnected';
+            isSending = false;
+            riskMessageEl.style.opacity = '0';
+            
+            startButton.disabled = false;
+            startButton.textContent = 'Connect to Server';
+            startButton.classList.remove('bg-green-500', 'bg-blue-500');
+            startButton.classList.add('bg-orange-500', 'hover:bg-orange-600');
+            stopButton.disabled = true;
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === 'config') {
+                serverConfig.width = data.frame_size.width;
+                serverConfig.height = data.frame_size.height;
+                modelInfoEl.textContent = data.model;
+                
+                critThresholdDisplay.textContent = data.thresholds.critical_ttc.toFixed(1);
+                warnThresholdDisplay.textContent = data.thresholds.warning_ttc.toFixed(1);
+                
+                canvas.width = serverConfig.width;
+                canvas.height = serverConfig.height;
+
+            } else if (data.type === 'detection') {
+                currentDetections = data.detections;
+                updateClosestObjectDebug(); 
+            }
+        };
+    }
+    
+    // Camera Control (Triggered by User Gesture)
+    async function startCamera() {
+        if (isSending || ws.readyState !== WebSocket.OPEN) return;
+
+        try {
+            if (!audioContext || audioContext.state === 'closed') {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+            
+            stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    width: { exact: serverConfig.width }, 
+                    height: { exact: serverConfig.height } 
+                }
+            });
+            video.srcObject = stream;
+            await new Promise(resolve => video.onloadedmetadata = resolve);
+
+            video.play();
+            isSending = true;
+            
+            sendFrameLoop(); 
+            animationLoop(performance.now()); // Start animation loop
+            
+            startButton.disabled = true;
+            startButton.textContent = 'Monitoring Active';
+            startButton.classList.remove('bg-green-500', 'bg-orange-500');
+            startButton.classList.add('bg-blue-500');
+            stopButton.disabled = false;
+            wsStatusEl.textContent = 'Monitoring Active';
+
+        } catch (err) {
+            wsStatusEl.textContent = `Camera Error: ${err.name}. Check permissions.`;
+            startButton.disabled = false;
+            startButton.textContent = 'Camera Failed (Click to Try Again)';
+            startButton.classList.remove('bg-blue-500', 'bg-green-500');
+            startButton.classList.add('bg-orange-500', 'hover:bg-orange-600');
+        }
+    }
+
+    function stopCamera() {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
+        isSending = false;
+        
+        if (animationFrameId) { cancelAnimationFrame(animationFrameId); }
+        
+        currentDetections = [];
+        objectCountEl.textContent = 0;
+        fpsCounterEl.textContent = '0 FPS';
+        
+        startButton.disabled = false;
+        startButton.textContent = 'Start Camera & ADAS Monitoring';
+        startButton.classList.remove('bg-blue-500', 'bg-gray-500', 'bg-orange-500');
+        startButton.classList.add('bg-green-500', 'hover:bg-green-600');
+        stopButton.disabled = true;
+        wsStatusEl.textContent = 'Connected (Ready)';
+        riskMessageEl.style.opacity = '0';
+        updateClosestObjectDebug(); 
+    }
+
+    // --- Initialization & Firebase Setup ---
+
+    window.setupFirebase = async function() {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        let firebaseConfig = {};
+        
+        try {
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                firebaseConfig = JSON.parse(__firebase_config);
+            }
+        } catch(e) {
+            console.error("Error parsing Firebase config:", e);
+        }
+
+        // Only attempt Firebase initialization if config is provided
+        if (Object.keys(firebaseConfig).length > 0 && firebaseConfig.projectId) {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            
+            const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+            try {
+                if (token) {
+                    await signInWithCustomToken(auth, token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        firebaseReady = true;
+                        userIdDisplay.textContent = userId;
+                        setupSettingsListener(); // Start listening for settings
+                    } else {
+                        userIdDisplay.textContent = 'N/A (Signed Out)';
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase authentication failed:", error);
+            }
+        } else {
+            // If running locally without config
+            userIdDisplay.textContent = 'Local Mode (Persistence Disabled)';
+            // Manually run connection and initial settings load
+            setupSettingsListener(); // Use local defaults
+        }
+    }
+
+    // Event Listeners
+    startButton.addEventListener('click', () => {
+        if (ws && ws.readyState === WebSocket.OPEN && !isSending) {
+            startCamera();
+        } else if (ws.readyState !== WebSocket.OPEN) {
+            connectWebSocket(); // Attempt reconnect
+        }
+    });
+    
+    stopButton.addEventListener('click', stopCamera);
+    saveSettingsBtn.addEventListener('click', window.saveUserSettings);
+    
+    // Initial connection attempt and setup on load
+    document.addEventListener('DOMContentLoaded', () => {
+        window.setupFirebase();
+        window.connectWebSocket();
+    });
+
+</script>
+</body>
+</html>
