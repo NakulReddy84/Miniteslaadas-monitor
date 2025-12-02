@@ -18,15 +18,18 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 MODEL_PATH = 'yolov8n.pt'  # YOLO model for detection
 FRAME_WIDTH = 640  
 FRAME_HEIGHT = 480 
-WEBSOCKET_PORT = 8765
 
-# Time-to-Collision (TTC) thresholds in seconds
+# CLOUD DEPLOYMENT FIX: Use the PORT environment variable provided by Render.
+# If running locally, default to 8765.
+WEBSOCKET_PORT = int(os.environ.get("PORT", 8765))
+
+# Active thresholds (dynamically updated by the client)
 USER_CONFIG = {
     'critical_ttc': 1.5,
     'warning_ttc': 3.0,
     'safe_ttc': 999.0,
     'detection_confidence': 0.25,
-    'speed_calibration_factor': 0.5 
+    'speed_calibration_factor': 15.0  # INCREASED: Makes speed (MPH) reading more visible
 }
 
 # Target classes: None means detect ALL 80 COCO classes
@@ -87,7 +90,7 @@ def base64_to_image(base64_data):
 
 class RiskSmoother:
     """Smooths risk levels over a short window to prevent rapid flickering."""
-    def __init__(self, history_len=5):
+    def __init__(self, history_len=3): # REDUCED to 3 for faster response
         self.history = []
         self.history_len = history_len
         self.risk_precedence = {'Safe': 0, 'Warning': 1, 'Critical': 2}
@@ -99,6 +102,7 @@ class RiskSmoother:
         if len(self.history) > self.history_len:
             self.history.pop(0)
         
+        # Return the highest risk seen in the window (conservative safety)
         highest_precedence = max(self.history)
         return self.risk_names.get(highest_precedence, 'Safe')
 
@@ -111,6 +115,7 @@ class ObjectTracker:
 
     def _get_risk_level(self, ttc):
         """Determines the risk level based on the calculated TTC using active config."""
+        # Use robust comparison with a small epsilon
         epsilon = 0.001
         if ttc <= USER_CONFIG['critical_ttc'] + epsilon:
             return "Critical"
@@ -120,7 +125,10 @@ class ObjectTracker:
             return "Safe"
 
     def update_and_get_ttc(self, results, current_time, model_names):
-        """Processes YOLO results, calculates TTC and Speed."""
+        """
+        Processes YOLO results, calculates TTC for the closest object, and returns 
+        the risk and bounding box data.
+        """
         detections_output = []
         
         if not results or not results[0].boxes or results[0].boxes.xyxy.numel() == 0:
@@ -128,8 +136,10 @@ class ObjectTracker:
             return detections_output 
 
         boxes = results[0].boxes
+        # Calculate height for all boxes: y2 - y1
         heights = boxes.xyxy.cpu().numpy()[:, 3] - boxes.xyxy.cpu().numpy()[:, 1]
         
+        # Find index of the largest height (closest threat)
         closest_box_index = np.argmax(heights)
         
         box = boxes.xyxy.cpu().numpy()[closest_box_index]
@@ -156,6 +166,7 @@ class ObjectTracker:
             if dt > 0.001:
                 dh_dt = (current_height - last_height) / dt
                 
+                # Only calculate TTC if height is growing (moving closer)
                 if dh_dt > self.min_dh_dt_threshold:
                     ttc = current_height / dh_dt
                     
@@ -196,6 +207,7 @@ async def websocket_server_logic(websocket, model, tracker, smoother):
             current_time = time.time()
             data = json.loads(message)
             
+            # --- Handle Configuration Update from Client ---
             if data.get('type') == 'SETTINGS_UPDATE':
                 if update_user_config(data['critical'], data['warning']):
                     config['thresholds'] = {'critical_ttc': USER_CONFIG['critical_ttc'], 'warning_ttc': USER_CONFIG['warning_ttc']}
@@ -213,6 +225,7 @@ async def websocket_server_logic(websocket, model, tracker, smoother):
 
                 # YOLO Prediction (Non-blocking)
                 def run_yolo_predict():
+                    # Using predict() is safer/simpler than track() if dependencies are missing
                     return model.predict(frame, verbose=False, classes=TARGET_CLASSES, conf=USER_CONFIG['detection_confidence'])
 
                 results = await asyncio.to_thread(run_yolo_predict)
@@ -233,6 +246,7 @@ async def websocket_server_logic(websocket, model, tracker, smoother):
                     if detections_output[0]['speed_mph'] > 0:
                          logging.info(f"TRACKING: Speed={detections_output[0]['speed_mph']:.1f} MPH, TTC={detections_output[0]['ttc']:.1f}s, Risk={smoothed_risk}")
 
+                # 5. Send Response
                 response = {
                     'type': 'detection',
                     'timestamp': current_time,
@@ -267,14 +281,15 @@ async def main_server_runner():
     tracker = ObjectTracker()
     smoother = RiskSmoother()
 
-    # FIXED: Handler wrapper that accepts arbitrary arguments (like path) but ignores them
+    # Handler wrapper that accepts arbitrary arguments (like path) but ignores them
     async def handler_wrapper(websocket, *args):
         await websocket_server_logic(websocket, model, tracker, smoother)
 
-    start_server = websockets.serve(handler_wrapper, "0.0.0.0", 8765)
+    # CLOUD FIX: Use the dynamic WEBSOCKET_PORT variable here
+    start_server = websockets.serve(handler_wrapper, "0.0.0.0", WEBSOCKET_PORT)
 
     logging.info("--- ADAS WebSocket Server Initialized ---")
-    logging.info("Websocket Server Running on ws://0.0.0.0:8765")
+    logging.info(f"Websocket Server Running on port {WEBSOCKET_PORT}")
 
     async with start_server:
         await asyncio.Future() 
