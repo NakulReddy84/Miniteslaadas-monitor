@@ -186,7 +186,7 @@
     import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     
     // --- Global Variables ---
-    const WS_URL = "wss://miniteslaadas-monitor.onrender.com";
+    const WS_URL = "wss://miniteslaadas-monitor.onrender.com"; // Localhost default. Update to wss:// if deploying to cloud.
     const VIDEO_FPS = 10; 
     
     let ws = null;
@@ -298,8 +298,8 @@
 
     function updateClosestObjectDebug() {
         if (currentDetections.length === 0) {
-            closestTtcEl.textContent = 'N/A';
-            closestRiskEl.textContent = 'N/A';
+            closestTtcEl.textContent = 'N/A'; 
+            closestRiskEl.textContent = 'N/A'; 
             closestSpeedEl.textContent = 'N/A';
             closestRiskEl.classList.remove('text-red-400', 'text-yellow-400', 'text-green-400');
             closestRiskEl.classList.add('text-gray-300');
@@ -312,13 +312,13 @@
         
         closestTtcEl.textContent = ttcDisplay;
         
-        // ADDED: Display Speed in sidebar
+        // Display Speed
         if (closestDetection.speed_mph) {
              closestSpeedEl.textContent = closestDetection.speed_mph.toFixed(1) + " MPH";
         } else {
              closestSpeedEl.textContent = "0.0 MPH";
         }
-
+        
         closestRiskEl.textContent = closestDetection.risk;
 
         // FIX: Manually clear all color classes before applying the new one
@@ -327,11 +327,11 @@
         
         // Apply dynamic styling based on the closest object's risk
         if (closestDetection.risk === 'Critical') {
-            closestRiskEl.classList.add('font-bold', 'text-lg', 'text-red-400');
+            closestRiskEl.classList.add('text-red-400');
         } else if (closestDetection.risk === 'Warning') {
-            closestRiskEl.classList.add('font-bold', 'text-lg', 'text-yellow-400');
+            closestRiskEl.classList.add('text-yellow-400');
         } else {
-            closestRiskEl.classList.add('font-bold', 'text-lg', 'text-green-400');
+            closestRiskEl.classList.add('text-green-400');
         }
     }
 
@@ -363,10 +363,7 @@
             // Draw label background and text
             const ttcStr = d.ttc === 999.0 ? 'Safe' : d.ttc.toFixed(1) + 's';
             const speedStr = d.speed_mph ? ` | ${d.speed_mph.toFixed(1)} MPH` : '';
-            
-            // ADDED: Speed in label text
             const labelText = `${d.label}${speedStr} | TTC: ${ttcStr} | ${d.risk}`; 
-            
             ctx.font = '16px Inter, sans-serif';
             
             const textMetrics = ctx.measureText(labelText);
@@ -614,6 +611,7 @@
                 await audioContext.resume();
             }
             
+            // FIX: Ensure video stream request matches configured size to prevent ZOOM
             stream = await navigator.mediaDevices.getUserMedia({ 
                 video: { 
                     width: { exact: serverConfig.width }, 
