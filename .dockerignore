@@ -1,0 +1,8 @@
+# Ignore local virtual environments and cache files
+venv/
+env/
+__pycache__/
+*.py[cod]
+
+# Ignore system files
+.DS_Store
