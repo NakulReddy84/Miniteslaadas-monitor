@@ -5,16 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kollision Vision | Cloud-Native ADAS</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 
-    <script>
-        // SECURITY FIX: Force HTTPS (Commented out for Preview)
-        // Browsers block camera access on HTTP. This script redirects traffic to HTTPS automatically.
-        // Uncomment this when deploying to a public domain like your .com!
-        if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-            location.replace(`https:${location.href.substring(location.protocol.length)}`);
-        }
-    </script> 
-    -->
     <style>
         /* Futuristic Dark Theme */
         body {
@@ -90,22 +80,30 @@
             20% { opacity: 1; }
             100% { top: 140px; opacity: 0; }
         }
-        /* Approaching Animal */
+        
+        /* Approaching Objects (Animal & Car) */
         .obstacle {
             position: absolute;
             bottom: 50px;
             left: 50%;
             transform: translateX(-50%) scale(0.1);
             font-size: 4rem;
-            animation: approach 3s ease-in infinite;
+            /* 6s duration to allow alternating (3s per object) */
+            animation: approach 6s ease-in infinite;
             z-index: 10;
+            opacity: 0; /* Start hidden */
         }
+        
         @keyframes approach {
+            /* 0% - 50% is the active approach phase (3 seconds) */
             0% { bottom: 130px; transform: translateX(-50%) scale(0.1); opacity: 0; }
-            20% { opacity: 1; }
-            80% { bottom: -10px; transform: translateX(-50%) scale(1.5); opacity: 1; }
-            100% { bottom: -20px; transform: translateX(-50%) scale(2.0); opacity: 0; }
+            10% { opacity: 1; }
+            40% { bottom: -10px; transform: translateX(-50%) scale(1.5); opacity: 1; }
+            50% { bottom: -20px; transform: translateX(-50%) scale(2.0); opacity: 0; }
+            /* 51% - 100% stays hidden while the other object takes its turn */
+            100% { opacity: 0; }
         }
+
         /* Flashing Red Alert */
         .warning-overlay {
             position: absolute;
@@ -117,7 +115,8 @@
             align-items: center;
             justify-content: center;
             z-index: 20;
-            animation: flashRed 3s infinite; /* Sync with approach */
+            /* 3s duration means it flashes twice per 6s cycle (once for deer, once for car) */
+            animation: flashRed 3s infinite; 
         }
         @keyframes flashRed {
             0%, 60% { opacity: 0; } /* Safe while far away */
@@ -155,8 +154,9 @@
                 <div class="road-line" style="animation-delay: 0.6s;"></div>
             </div>
             
-            <!-- The "Animal" approaching -->
-            <div class="obstacle">🦌</div>
+            <!-- The Objects approaching (Alternating) -->
+            <div class="obstacle">🦌</div> <!-- Animal (Starts at 0s) -->
+            <div class="obstacle" style="animation-delay: 3s;">🚘</div> <!-- Car (Starts at 3s) -->
 
             <!-- The Critical Warning Overlay -->
             <div class="warning-overlay">
