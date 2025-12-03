@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kollision Vision | Cloud-Native ADAS</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // SECURITY FIX: Force HTTPS (COMMENTED OUT FOR PREVIEW)
+        // In production, browsers block camera access on HTTP. 
+        // Uncomment the lines below when deploying to your live .com domain!
+        
+        /*
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+            location.replace(`https:${location.href.substring(location.protocol.length)}`);
+        }
+        */
+    </script>
     <style>
         /* Futuristic Dark Theme */
         body {
@@ -22,9 +33,9 @@
         .hero-text {
             background: linear-gradient(to right, #60a5fa, #34d399);
             -webkit-background-clip: text;
-            background-clip: text; /* Standard property added for compatibility */
+            background-clip: text; 
             -webkit-text-fill-color: transparent;
-            color: transparent; /* Fallback */
+            color: transparent;
             font-weight: 900;
             letter-spacing: -0.05em;
         }
