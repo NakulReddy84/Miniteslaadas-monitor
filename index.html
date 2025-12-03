@@ -22,7 +22,9 @@
         .hero-text {
             background: linear-gradient(to right, #60a5fa, #34d399);
             -webkit-background-clip: text;
+            background-clip: text; /* Standard property added for compatibility */
             -webkit-text-fill-color: transparent;
+            color: transparent; /* Fallback */
             font-weight: 900;
             letter-spacing: -0.05em;
         }
