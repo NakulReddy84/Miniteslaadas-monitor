@@ -2,20 +2,36 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Kollision Vision | Cloud-Native ADAS</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- ================================================== -->
+    <!-- PWA CONFIGURATION -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    
+    <!-- iOS Support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2432/2432653.png">
+    
     <script>
-        // SECURITY FIX: Force HTTPS (COMMENTED OUT FOR PREVIEW)
-        // In production, browsers block camera access on HTTP. 
-        // Uncomment the lines below when deploying to your live .com domain!
-        
-        /*
+        // 1. Register PWA Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+            .then(() => console.log("Service Worker Registered"))
+            .catch(err => console.log("Service Worker Failed", err));
+        }
+
+        // 2. SECURITY FIX: Force HTTPS (ACTIVE FOR PRODUCTION)
+        // This ensures the Camera will work when the user clicks "Launch".
         if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
             location.replace(`https:${location.href.substring(location.protocol.length)}`);
         }
-        */
     </script>
+    <!-- ================================================== -->
+
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Futuristic Dark Theme */
         body {
@@ -35,7 +51,7 @@
             -webkit-background-clip: text;
             background-clip: text; 
             -webkit-text-fill-color: transparent;
-            color: transparent;
+            color: transparent; 
             font-weight: 900;
             letter-spacing: -0.05em;
         }
