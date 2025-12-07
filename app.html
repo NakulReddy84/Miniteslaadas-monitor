@@ -15,7 +15,10 @@
     
     <!-- 2. AI Engines (Local) -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-    <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+    
+    <!-- FIX: Removed 'onload' attribute to prevent ReferenceError. The script below polls for 'cv'. -->
+    <script async src="https://docs.opencv.org/4.8.0/opencv.js" type="text/javascript"></script>
+    
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
@@ -206,10 +209,8 @@
     const monitorContainer = document.getElementById('monitor-container');
     const critInput = document.getElementById('critical-input');
     const warnInput = document.getElementById('warning-input');
-    const fpsCounterEl = document.getElementById('fps-counter');
-    const objectCountEl = document.getElementById('object-count');
-    const userIdDisplay = document.getElementById('user-id-display');
     const saveStatusMsg = document.getElementById('save-status-msg');
+    const fpsCounter = document.getElementById('fps-counter');
 
     // --- FEATURE 1: BLACK BOX RECORDER ---
     class IncidentRecorder {
@@ -266,7 +267,6 @@
                 let rect = new cv.Rect(0, DISPLAY_H/2, DISPLAY_W, DISPLAY_H/2);
                 let roi = this.dst.roi(rect);
                 cv.HoughLinesP(roi, this.lines, 1, Math.PI / 180, 50, 50, 10);
-                
                 let status = "Center";
                 if (this.lines.rows > 0) {
                     let left=0, right=0;
@@ -275,30 +275,22 @@
                         let y1 = this.lines.data32S[i * 4 + 1] + DISPLAY_H/2;
                         let x2 = this.lines.data32S[i * 4 + 2];
                         let y2 = this.lines.data32S[i * 4 + 3] + DISPLAY_H/2;
-                        
                         canvasCtx.beginPath(); canvasCtx.moveTo(x1, y1); canvasCtx.lineTo(x2, y2);
                         canvasCtx.lineWidth = 3; canvasCtx.strokeStyle = 'cyan'; canvasCtx.stroke();
-                        
                         if (x1 < DISPLAY_W/2) left++; else right++;
                     }
-                    if (left > right + 2) status = "Drift Left";
-                    else if (right > left + 2) status = "Drift Right";
+                    if (left > right + 2) status = "Drift Left"; else if (right > left + 2) status = "Drift Right";
                 }
-                roi.delete();
-                return status;
+                roi.delete(); return status;
             } catch(e) { return "CV Error"; }
         }
     }
-    
-    // Polling for OpenCV
     const laneTracker = new LaneTracker();
+    
+    // Polling for OpenCV Init
     function checkOpenCV() {
-        if (typeof cv !== 'undefined' && cv.Mat) {
-            cvLoaded = true;
-            laneTracker.init();
-        } else {
-            setTimeout(checkOpenCV, 100);
-        }
+        if (typeof cv !== 'undefined' && cv.Mat) { cvLoaded = true; laneTracker.init(); } 
+        else { setTimeout(checkOpenCV, 100); }
     }
     checkOpenCV();
 
@@ -313,14 +305,12 @@
             return (A + B) / (2.0 * C);
         }
         process(results) {
-            if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
-                return { status: "No Face", alert: false, val: 0 };
-            }
-            const landmarks = results.multiFaceLandmarks[0];
+            if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return { status: "No Face", alert: false, val: 0 };
+            const lm = results.multiFaceLandmarks[0];
             const leftIndices = [33, 160, 158, 133, 153, 144];
             const rightIndices = [362, 385, 387, 263, 373, 380];
-            const leftEye = leftIndices.map(i => landmarks[i]);
-            const rightEye = rightIndices.map(i => landmarks[i]);
+            const leftEye = leftIndices.map(i => lm[i]);
+            const rightEye = rightIndices.map(i => lm[i]);
             const avgEAR = (this.getEAR(leftEye) + this.getEAR(rightEye)) / 2.0;
 
             if (avgEAR < EAR_THRESHOLD) this.closedFrameCount++;
@@ -370,7 +360,6 @@
     }
     const tracker = new ObjectTracker();
 
-    // --- HELPERS & AUDIO ---
     function playBeep(riskLevel) {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -386,19 +375,16 @@
         }
     }
 
-    // --- YOLO HELPERS ---
-    function preprocess(ctx) {
-        // Letterboxing
+    // --- YOLO PREPROCESS ---
+    function preprocess(sourceVideo, vw, vh) {
         scaleFactor = Math.min(YOLO_SIZE / vw, YOLO_SIZE / vh);
         const newWidth = vw * scaleFactor;
         const newHeight = vh * scaleFactor;
         xOffset = (YOLO_SIZE - newWidth) / 2;
         yOffset = (YOLO_SIZE - newHeight) / 2;
-
         tempCtx.fillStyle = "black";
         tempCtx.fillRect(0, 0, YOLO_SIZE, YOLO_SIZE);
         tempCtx.drawImage(sourceVideo, xOffset, yOffset, newWidth, newHeight);
-
         const imageData = tempCtx.getImageData(0, 0, YOLO_SIZE, YOLO_SIZE);
         const { data } = imageData;
         const totalPixels = YOLO_SIZE * YOLO_SIZE;
@@ -481,8 +467,10 @@
         if (!isProcessing && (now - lastTime > (1000 / TARGET_FPS))) {
             isProcessing = true; lastTime = now;
             try {
-                // FIX: Pass actual video dimensions
+                // Preprocess with actual video dims
                 const inputTensor = preprocess(video, video.videoWidth, video.videoHeight);
+                
+                // DYNAMIC OUTPUT NAME
                 const feeds = {};
                 feeds[session.inputNames[0]] = inputTensor;
                 const results = await session.run(feeds);
@@ -530,12 +518,12 @@
                     statusBox.classList.add('safe-border');
                 }
 
-            } catch(e) { console.error(e); } finally { isProcessing = false; }
+            } catch(e) { } finally { isProcessing = false; }
         }
         
         frameCount++;
         if (performance.now() - lastFpsTime >= 1000) { 
-            fpsCounterEl.innerText = frameCount; frameCount = 0; lastFpsTime = performance.now(); 
+            fpsCounter.innerText = frameCount; frameCount = 0; lastFpsTime = performance.now(); 
         }
         
         requestAnimationFrame(runRoadInference);
@@ -634,6 +622,7 @@
     
     // --- FIREBASE ---
     window.setupFirebase = async function() {
+        // Simple Init for Persistence
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         let firebaseConfig = {}; try { firebaseConfig = JSON.parse(__firebase_config); } catch {}
         if (firebaseConfig.projectId) {
@@ -645,37 +634,4 @@
                         if (snap.exists()) {
                             const s = snap.data();
                             TTC_THRESHOLDS.CRITICAL = s.critical_ttc;
-                            TTC_THRESHOLDS.WARNING = s.warning_ttc;
-                        }
-                    });
-                } });
-            } catch (e) {}
-        }
-    }
-    
-    window.saveUserSettings = async function() {
-        // Just visual feedback since logic uses global TTC_THRESHOLDS
-        const btn = document.getElementById('save-settings-btn');
-        const originalText = btn.innerText;
-        btn.innerText = "Saved!";
-        setTimeout(() => btn.innerText = originalText, 2000);
-        
-        // Update local thresholds
-        TTC_THRESHOLDS.CRITICAL = parseFloat(document.getElementById('critical-input').value);
-        TTC_THRESHOLDS.WARNING = parseFloat(document.getElementById('warning-input').value);
-        
-        if (firebaseReady) {
-            try {
-                await setDoc(doc(db, `artifacts/${typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'}/users/${userId}/settings`, 'adas_config'), {
-                    critical_ttc: TTC_THRESHOLDS.CRITICAL, warning_ttc: TTC_THRESHOLDS.WARNING
-                }, { merge: true });
-            } catch (e) {}
-        }
-    }
-
-    document.getElementById('save-settings-btn').addEventListener('click', window.saveUserSettings);
-    document.addEventListener('DOMContentLoaded', () => { window.setupFirebase(); window.onload = main; });
-
-</script>
-</body>
-</html>
+                            TTC_THRESHOLDS
