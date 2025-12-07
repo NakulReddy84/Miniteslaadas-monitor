@@ -25,9 +25,9 @@ WEBSOCKET_PORT = int(os.environ.get("PORT", 8765))
 
 # Active thresholds (dynamically updated by the client)
 USER_CONFIG = {
-    'critical_ttc': 1.5,
-    'warning_ttc': 3.0,
-    'safe_ttc': 999.0,
+    'critical_ttc': 5.0,
+    'warning_ttc': 10.0,
+    'safe_ttc': 499.0,
     'detection_confidence': 0.25,
     'speed_calibration_factor': 15.0  # INCREASED: Makes speed (MPH) reading more visible
 }
@@ -301,3 +301,4 @@ if __name__ == "__main__":
         logging.info("\nServer manually stopped.")
     except Exception as e:
         logging.critical(f"Server runtime error: {e}")
+
