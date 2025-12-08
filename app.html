@@ -266,10 +266,15 @@
                 this.src.data.set(imgData.data);
                 cv.cvtColor(this.src, this.dst, cv.COLOR_RGBA2GRAY, 0);
                 cv.Canny(this.dst, this.dst, 50, 200, 3, false);
+                // Region of Interest (Bottom half)
                 let rect = new cv.Rect(0, DISPLAY_H/2, DISPLAY_W, DISPLAY_H/2);
                 let roi = this.dst.roi(rect);
-                cv.HoughLinesP(roi, this.lines, 1, Math.PI / 180, 50, 50, 10);
-                let status = "Center";
+                
+                // ADJUSTED PARAMETERS: Lower threshold (30), shorter lines allowed (30), larger gaps allowed (20)
+                cv.HoughLinesP(roi, this.lines, 1, Math.PI / 180, 30, 30, 20);
+                
+                let status = "No Lanes"; // Default if nothing found
+                
                 if (this.lines.rows > 0) {
                     let left=0, right=0;
                     for (let i = 0; i < this.lines.rows; ++i) {
@@ -281,8 +286,19 @@
                         canvasCtx.lineWidth = 3; canvasCtx.strokeStyle = 'cyan'; canvasCtx.stroke();
                         if (x1 < DISPLAY_W/2) left++; else right++;
                     }
-                    if (left > right + 2) status = "Drift Left"; else if (right > left + 2) status = "Drift Right";
+                    if (left > right + 2) status = "Drift Left"; 
+                    else if (right > left + 2) status = "Drift Right";
+                    else status = "Center";
+                } else {
+                    // Visual feedback for scanning even if no lines found
+                    canvasCtx.save();
+                    canvasCtx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
+                    canvasCtx.lineWidth = 2;
+                    canvasCtx.setLineDash([5, 5]);
+                    canvasCtx.strokeRect(10, DISPLAY_H/2 + 10, DISPLAY_W-20, DISPLAY_H/2 - 20);
+                    canvasCtx.restore();
                 }
+                
                 roi.delete(); return status;
             } catch(e) { return "CV Error"; }
         }
@@ -460,8 +476,14 @@
         if (cvLoaded) {
             const laneStatus = laneTracker.detect(ctx, canvas.width, canvas.height);
             auxEl.innerText = laneStatus;
+            
+            // Visual feedback for drift
             if (laneStatus.includes("Drift")) monitorContainer.classList.add('lane-drift-border');
             else monitorContainer.classList.remove('lane-drift-border');
+            
+            // Make text red if no lanes
+            if (laneStatus === "No Lanes") auxEl.style.color = "#fbbf24"; // yellow warning
+            else auxEl.style.color = "#22d3ee"; // cyan default
         }
 
         lastDetections.forEach(d => {
