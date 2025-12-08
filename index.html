@@ -31,12 +31,17 @@
 
         /* The Lidar Canvas */
         #lidar-canvas {
-            width: 280px; height: 280px;
+            /* Responsive Sizing */
+            width: 220px; height: 220px;
             border-radius: 50%;
             border: 2px solid rgba(59, 130, 246, 0.2); /* Tesla Blue */
             background: radial-gradient(circle, rgba(10, 20, 30, 1) 0%, rgba(0,0,0,1) 100%);
             box-shadow: 0 0 40px rgba(59, 130, 246, 0.15);
             margin: 0 auto;
+        }
+        
+        @media (min-width: 768px) {
+            #lidar-canvas { width: 300px; height: 300px; }
         }
 
         /* Module Cards - Glassmorphism */
@@ -59,12 +64,13 @@
             text-transform: uppercase; font-weight: 800; letter-spacing: 2px;
             transition: all 0.3s;
             border-radius: 8px;
-            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.4);
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.6); /* Constant Glow */
+            z-index: 50;
         }
         .launch-btn:hover {
             background: #60a5fa; 
             transform: translateY(-2px);
-            box-shadow: 0 15px 40px rgba(59, 130, 246, 0.6);
+            box-shadow: 0 0 40px rgba(59, 130, 246, 0.9);
         }
         
         .neon-text { text-shadow: 0 0 15px rgba(59, 130, 246, 0.6); }
@@ -78,25 +84,25 @@
         }
     </style>
 </head>
-<body class="flex flex-col min-h-screen">
+<body class="flex flex-col h-screen">
 
     <!-- NEW: Live Autopilot Simulation Background -->
     <canvas id="bg-canvas"></canvas>
 
     <!-- Header -->
-    <header class="p-6 flex justify-between items-center z-10">
-        <div class="text-xl font-bold tracking-wider neon-text flex items-center gap-2">
+    <header class="p-4 flex justify-between items-center z-20 shrink-0 bg-black/20 backdrop-blur-sm">
+        <div class="text-lg font-bold tracking-wider neon-text flex items-center gap-2">
             <i class="fa-solid fa-robot text-blue-500"></i> KOLLISION VISION
         </div>
         
         <!-- PWA Install Button (Hidden by default, shown via JS) -->
-        <button id="install-btn" class="hidden flex items-center gap-2 bg-blue-900/80 border border-blue-500 text-blue-200 px-4 py-2 rounded text-xs font-bold uppercase hover:bg-blue-800 transition install-pulse">
+        <button id="install-btn" class="hidden flex items-center gap-2 bg-blue-900/80 border border-blue-500 text-blue-200 px-3 py-1.5 rounded text-[10px] font-bold uppercase hover:bg-blue-800 transition install-pulse">
             <i class="fa-solid fa-download"></i> Install App
         </button>
     </header>
 
-    <!-- Main Content -->
-    <main class="flex-grow flex flex-col items-center justify-start text-center px-4 z-10 relative pt-4 overflow-y-auto">
+    <!-- Main Content (Scrollable) -->
+    <main class="flex-grow flex flex-col items-center justify-start text-center px-4 z-10 relative pt-2 overflow-y-auto pb-24">
         
         <!-- Lidar Visualization -->
         <div class="relative mb-6 shrink-0">
@@ -162,15 +168,16 @@
             </div>
         </div>
 
-        <!-- Launch Button -->
+        <!-- Launch Button (Fixed position at bottom of scroll, or sticky?) -->
+        <!-- Just placing it at the end of flow with margin ensures it is reachable -->
         <a href="app.html" class="launch-btn px-12 py-4 text-xl inline-block relative group mb-8">
             ENGAGE SYSTEM
         </a>
 
     </main>
 
-    <footer class="p-4 z-10 text-center border-t border-white/5 bg-black/80 backdrop-blur text-[10px] text-gray-500">
-        KOLLISION VISION // CLOUD-NATIVE EDGE AI
+    <footer class="absolute bottom-2 left-0 w-full text-center z-0 pointer-events-none text-[10px] text-gray-600">
+        CLOUD-NATIVE EDGE COMPUTING // KOLLISION VISION
     </footer>
 
     <script>
