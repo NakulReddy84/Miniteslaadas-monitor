@@ -51,7 +51,8 @@
         }
         .rec-dot { width: 8px; height: 8px; background: white; border-radius: 50%; animation: blink 1s infinite; }
         
-        .mode-btn { background: #374151; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: bold; width: 48%; transition: background 0.2s; touch-action: manipulation; }
+        /* UPDATED: Removed fixed width for flex layout support */
+        .mode-btn { background: #374151; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: bold; transition: background 0.2s; touch-action: manipulation; }
         .mode-btn:active { background: #4b5563; }
         .mode-active { background: #3b82f6 !important; color: white; }
 
@@ -84,9 +85,11 @@
     <div class="lg:w-1/4 flex flex-col gap-4">
         <h1 class="text-2xl font-extrabold text-blue-400 mb-0">KAIROS Hybrid</h1>
         
-        <div class="flex justify-between mb-2">
-            <button id="btn-road" class="mode-btn mode-active" onclick="window.switchMode('road')">🛣️ ROAD</button>
-            <button id="btn-driver" class="mode-btn" onclick="window.switchMode('driver')">😴 DRIVER</button>
+        <!-- UPDATED: Flex container with 3 buttons (Road, Driver, Flip) -->
+        <div class="flex justify-between mb-2 gap-2">
+            <button id="btn-road" class="mode-btn flex-1 mode-active" onclick="window.switchMode('road')">🛣️ ROAD</button>
+            <button id="btn-driver" class="mode-btn flex-1" onclick="window.switchMode('driver')">😴 DRIVER</button>
+            <button id="btn-flip" class="mode-btn w-12 flex justify-center items-center" onclick="window.toggleCamera()" title="Switch Camera">📷</button>
         </div>
 
         <div class="status-box">
@@ -162,6 +165,7 @@
 
     // --- STATE ---
     let currentMode = 'road';
+    let currentFacingMode = 'environment'; // Track active camera
     let session = null;
     let faceMesh = null;
     let isProcessing = false;
@@ -238,7 +242,7 @@
         trigger(risk) { if (risk === 'Critical') this.start(); }
     }
 
-    // --- FEATURE 2: LANE DETECTION ---
+    // --- FEATURE 2: LANE DETECTION (IMPROVED: AVERAGING) ---
     class LaneTracker {
         constructor() { this.ready = false; this.src = null; this.dst = null; this.lines = null; }
         init() {
@@ -259,41 +263,76 @@
                 let rect = new cv.Rect(0, DISPLAY_H/2, DISPLAY_W, DISPLAY_H/2);
                 let roi = this.dst.roi(rect);
                 
-                // ADJUSTED: Stricter Thresholds to reduce "ghosting"
-                // Threshold: 50 (higher = stronger lines only)
-                // MinLineLength: 50 (ignore small cracks/noise)
-                cv.HoughLinesP(roi, this.lines, 1, Math.PI / 180, 50, 50, 20);
+                // Relaxed params to find segments, we will clean them up manually
+                cv.HoughLinesP(roi, this.lines, 1, Math.PI / 180, 30, 30, 20);
                 
                 let status = "No Lanes"; 
+                
+                // Collect lines for averaging
+                let leftLines = [], rightLines = [];
+                
                 if (this.lines.rows > 0) {
-                    let left=0, right=0;
                     for (let i = 0; i < this.lines.rows; ++i) {
                         let x1 = this.lines.data32S[i * 4];
                         let y1 = this.lines.data32S[i * 4 + 1] + DISPLAY_H/2;
                         let x2 = this.lines.data32S[i * 4 + 2];
                         let y2 = this.lines.data32S[i * 4 + 3] + DISPLAY_H/2;
                         
-                        // NEW: SLOPE FILTER
-                        // Calculate slope (delta Y / delta X)
-                        // Ignore horizontal-ish lines (dashboard, horizon) and vertical noise
                         const slope = (y2 - y1) / (x2 - x1);
-                        if (Math.abs(slope) < 0.3 || Math.abs(slope) > 5) continue;
-
-                        canvasCtx.beginPath(); canvasCtx.moveTo(x1, y1); canvasCtx.lineTo(x2, y2);
-                        canvasCtx.lineWidth = 3; canvasCtx.strokeStyle = 'cyan'; canvasCtx.stroke();
-                        if (x1 < DISPLAY_W/2) left++; else right++;
+                        const length = Math.sqrt((y2-y1)**2 + (x2-x1)**2);
+                        
+                        // Classify Left vs Right based on slope
+                        // Left lane (/) has negative slope in canvas (y increases down)
+                        if (slope < -0.3 && slope > -5) {
+                            leftLines.push({slope, x1, y1, x2, y2, length});
+                        } 
+                        // Right lane (\) has positive slope
+                        else if (slope > 0.3 && slope < 5) {
+                            rightLines.push({slope, x1, y1, x2, y2, length});
+                        }
                     }
                     
-                    // Only update status if we actually counted valid lines after filtering
-                    if (left > 0 || right > 0) {
-                         if (left > right + 1) status = "Drift Left"; 
-                         else if (right > left + 1) status = "Drift Right";
-                         else status = "Center";
-                    }
+                    // Helper to draw single averaged line
+                    const drawAvgLine = (lines) => {
+                        if (lines.length === 0) return false;
+                        // Simple average (could be weighted by length for better accuracy)
+                        let avgSlope = 0, avgX = 0, avgY = 0, count = 0;
+                        lines.forEach(l => { 
+                            avgSlope += l.slope; avgX += (l.x1 + l.x2)/2; avgY += (l.y1 + l.y2)/2; count++; 
+                        });
+                        avgSlope /= count; avgX /= count; avgY /= count;
+                        
+                        // Calculate endpoints for drawing (y = mx + b -> x = (y-b)/m)
+                        // b = y - mx
+                        const intercept = avgY - (avgSlope * avgX);
+                        const yBottom = DISPLAY_H;
+                        const yTop = DISPLAY_H * 0.6; // Horizon
+                        
+                        const xBottom = (yBottom - intercept) / avgSlope;
+                        const xTop = (yTop - intercept) / avgSlope;
+                        
+                        canvasCtx.beginPath(); 
+                        canvasCtx.moveTo(xBottom, yBottom); 
+                        canvasCtx.lineTo(xTop, yTop);
+                        canvasCtx.lineWidth = 5; 
+                        canvasCtx.strokeStyle = 'cyan'; 
+                        canvasCtx.shadowBlur = 10;
+                        canvasCtx.shadowColor = 'cyan';
+                        canvasCtx.stroke();
+                        canvasCtx.shadowBlur = 0; // Reset
+                        return true;
+                    };
+
+                    const hasLeft = drawAvgLine(leftLines);
+                    const hasRight = drawAvgLine(rightLines);
+                    
+                    if (hasLeft && hasRight) status = "Center";
+                    else if (hasLeft) status = "Drift Right"; // Only seeing left lane
+                    else if (hasRight) status = "Drift Left"; // Only seeing right lane
                 } else {
                     // Show "Searching" box
                     canvasCtx.save();
-                    canvasCtx.strokeStyle = 'rgba(251, 191, 36, 0.3)'; // Yellow-ish
+                    canvasCtx.strokeStyle = 'rgba(251, 191, 36, 0.3)';
                     canvasCtx.lineWidth = 2;
                     canvasCtx.setLineDash([5, 5]);
                     canvasCtx.strokeRect(20, DISPLAY_H/2 + 20, DISPLAY_W-40, DISPLAY_H/2 - 40);
@@ -551,28 +590,22 @@
         requestAnimationFrame(runRoadInference);
     }
 
-    // --- SWITCH MODES ---
-    window.switchMode = async function(mode) {
-        currentMode = mode;
-        document.getElementById('btn-road').className = mode === 'road' ? 'mode-btn mode-active' : 'mode-btn';
-        document.getElementById('btn-driver').className = mode === 'driver' ? 'mode-btn mode-active' : 'mode-btn';
-        
-        // FIX for Mobile: Request "ideal" resolution, not strict
+    // --- SWITCH MODES & TOGGLE CAMERA ---
+    async function startCamera() {
+        if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
         const constraints = { 
             video: { 
                 width: { ideal: DISPLAY_W }, 
                 height: { ideal: DISPLAY_H }, 
-                facingMode: mode === 'road' ? 'environment' : 'user' 
+                facingMode: currentFacingMode 
             } 
         };
-        
         try {
-            if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             video.srcObject = stream;
             video.onloadedmetadata = async () => {
                 video.play();
-                if (mode === 'road') {
+                if (currentMode === 'road') {
                     canvas.style.transform = "scaleX(1)";
                     runRoadInference();
                 } else {
@@ -582,14 +615,23 @@
                 }
             };
         } catch (err) {
-            console.error("Camera Error:", err);
+            console.error(err);
             cameraErrorEl.classList.remove('hidden');
-            if (location.protocol === 'http:' && location.hostname !== 'localhost') {
-                 cameraErrorEl.innerHTML = `⚠️ <b>Mobile Camera Blocked</b><br>Browsers block cameras on insecure HTTP connections.<br><br><b>Solutions:</b><br>1. Use <b>localhost</b> on PC.<br>2. Use <b>ngrok</b> to get an HTTPS link for mobile.<br>3. Enable "Insecure origins treated as secure" in chrome://flags.`;
-            } else {
-                 cameraErrorEl.innerHTML = `⚠️ <b>Camera Error</b><br>${err.message}`;
-            }
+            cameraErrorEl.innerHTML = `⚠️ <b>Camera Error</b><br>${err.message}`;
         }
+    }
+
+    window.switchMode = async function(mode) {
+        currentMode = mode;
+        document.getElementById('btn-road').className = mode === 'road' ? 'mode-btn flex-1 mode-active' : 'mode-btn flex-1';
+        document.getElementById('btn-driver').className = mode === 'driver' ? 'mode-btn flex-1 mode-active' : 'mode-btn flex-1';
+        currentFacingMode = mode === 'road' ? 'environment' : 'user';
+        await startCamera();
+    }
+
+    window.toggleCamera = async function() {
+        currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+        await startCamera();
     }
 
     // --- INITIALIZATION ---
