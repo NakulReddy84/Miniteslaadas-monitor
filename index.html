@@ -2,231 +2,260 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Kollision Vision | Cloud-Native ADAS</title>
-    
-    <!-- ================================================== -->
-    <!-- PWA CONFIGURATION -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#0f172a">
-    
-    <!-- iOS Support -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2432/2432653.png">
-    
-    <script>
-        // 1. Register PWA Service Worker
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js')
-            .then(() => console.log("Service Worker Registered"))
-            .catch(err => console.log("Service Worker Failed", err));
-        }
-
-        // 2. SECURITY FIX: Force HTTPS (ACTIVE FOR PRODUCTION)
-        // This ensures the Camera will work when the user clicks "Launch".
-        if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-            location.replace(`https:${location.href.substring(location.protocol.length)}`);
-        }
-    </script>
-    <!-- ================================================== -->
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kollision Vision | Initialize</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- PWA Config -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+
     <style>
-        /* Futuristic Dark Theme */
         body {
-            background-color: #0f172a; /* Deep Slate */
-            color: #f3f4f6;
-            font-family: 'Inter', sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            background-image: radial-gradient(circle at 50% 50%, #1e293b 0%, #0f172a 100%);
-        }
-        .hero-text {
-            background: linear-gradient(to right, #60a5fa, #34d399);
-            -webkit-background-clip: text;
-            background-clip: text; 
-            -webkit-text-fill-color: transparent;
-            color: transparent; 
-            font-weight: 900;
-            letter-spacing: -0.05em;
-        }
-        .glow-btn {
-            transition: all 0.3s ease;
-            box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
-        }
-        .glow-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 25px rgba(59, 130, 246, 0.8);
-        }
-        .card {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background-color: #050505;
+            color: #00ffcc; /* Cyan/Teal Cyberpunk look */
+            font-family: 'JetBrains Mono', monospace;
+            overflow-x: hidden;
         }
 
-        /* --- Simulation Animations --- */
-        .sim-screen {
-            position: relative;
-            width: 100%;
-            height: 280px;
-            background: linear-gradient(to bottom, #0f172a 50%, #334155 50%);
-            overflow: hidden;
-            border-radius: 0.75rem;
-            border: 2px solid #475569;
-            margin-bottom: 2rem;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
-        }
-        .road {
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 300px;
-            height: 140px;
-            background: #475569;
-            clip-path: polygon(30% 0, 70% 0, 100% 100%, 0 100%);
-        }
-        /* Moving road lines to simulate speed */
-        .road-line {
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 4px;
-            height: 20px;
-            background: #fbbf24;
-            animation: moveLine 0.8s linear infinite;
-        }
-        @keyframes moveLine {
-            0% { top: 0; opacity: 0; }
-            20% { opacity: 1; }
-            100% { top: 140px; opacity: 0; }
-        }
-        
-        /* Approaching Objects (Animal & Car) */
-        .obstacle {
-            position: absolute;
-            bottom: 50px;
-            left: 50%;
-            transform: translateX(-50%) scale(0.1);
-            font-size: 4rem;
-            /* 6s duration to allow alternating (3s per object) */
-            animation: approach 6s ease-in infinite;
-            z-index: 10;
-            opacity: 0; /* Start hidden */
-        }
-        
-        @keyframes approach {
-            /* 0% - 50% is the active approach phase (3 seconds) */
-            0% { bottom: 130px; transform: translateX(-50%) scale(0.1); opacity: 0; }
-            10% { opacity: 1; }
-            40% { bottom: -10px; transform: translateX(-50%) scale(1.5); opacity: 1; }
-            50% { bottom: -20px; transform: translateX(-50%) scale(2.0); opacity: 0; }
-            /* 51% - 100% stays hidden while the other object takes its turn */
-            100% { opacity: 0; }
-        }
-
-        /* Flashing Red Alert */
-        .warning-overlay {
+        /* Moving Grid Background */
+        .perspective-grid {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(220, 38, 38, 0.4);
-            border: 6px solid #ef4444;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 20;
-            /* 3s duration means it flashes twice per 6s cycle (once for deer, once for car) */
-            animation: flashRed 3s infinite; 
+            background: 
+                linear-gradient(rgba(5,5,5,1) 0%, rgba(5,5,5,0) 40%),
+                linear-gradient(90deg, rgba(0,255,204,0.1) 1px, transparent 1px),
+                linear-gradient(rgba(0,255,204,0.1) 1px, transparent 1px);
+            background-size: 100px 100px, 40px 40px, 40px 40px;
+            transform: perspective(500px) rotateX(60deg) translateY(-100px) translateZ(-200px);
+            animation: gridMove 2s linear infinite;
+            z-index: -1;
+            opacity: 0.3;
         }
-        @keyframes flashRed {
-            0%, 60% { opacity: 0; } /* Safe while far away */
-            65%, 95% { opacity: 1; } /* Critical when close */
-            100% { opacity: 0; }
+
+        @keyframes gridMove {
+            0% { background-position: 0 0, 0 0, 0 0; }
+            100% { background-position: 0 40px, 0 40px, 0 40px; }
+        }
+
+        /* The Lidar Canvas */
+        #lidar-canvas {
+            width: 280px; height: 280px;
+            border-radius: 50%;
+            border: 2px solid rgba(0, 255, 204, 0.2);
+            background: radial-gradient(circle, rgba(0,20,10,1) 0%, rgba(0,0,0,1) 100%);
+            box-shadow: 0 0 30px rgba(0, 255, 204, 0.1);
+            margin: 0 auto;
+        }
+
+        /* Module Cards */
+        .module-card {
+            background: rgba(0, 20, 15, 0.6);
+            border: 1px solid rgba(0, 255, 204, 0.2);
+            border-left: 4px solid #00ffcc;
+            transition: all 0.3s ease;
+        }
+        .module-card:hover {
+            transform: translateX(5px);
+            background: rgba(0, 255, 204, 0.1);
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);
+        }
+
+        /* Launch Button */
+        .launch-btn {
+            background: #00ffcc; color: #000;
+            text-transform: uppercase; font-weight: 800; letter-spacing: 2px;
+            transition: all 0.3s;
+            clip-path: polygon(10% 0, 100% 0, 100% 70%, 90% 100%, 0 100%, 0 30%);
+        }
+        .launch-btn:hover {
+            background: #fff; box-shadow: 0 0 30px #00ffcc;
+            transform: translateY(-2px);
+        }
+        
+        .neon-text { text-shadow: 0 0 10px rgba(0, 255, 204, 0.7); }
+
+        /* PWA Install Button Animation */
+        .install-pulse { animation: pulse-green 2s infinite; }
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(0, 255, 204, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(0, 255, 204, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 255, 204, 0); }
         }
     </style>
 </head>
-<body>
+<body class="flex flex-col min-h-screen">
 
-    <!-- Navigation / Logo -->
-    <nav class="absolute top-0 w-full p-6 flex justify-between items-center max-w-6xl">
-        <div class="text-2xl font-bold tracking-tighter text-white">KOLLISION VISION</div>
-        <div class="text-sm text-gray-400">v1.0.0 (Cloud Native)</div>
-    </nav>
+    <!-- Visual Effects -->
+    <div class="perspective-grid"></div>
+
+    <!-- Header -->
+    <header class="p-6 flex justify-between items-center z-10">
+        <div class="text-xl font-bold tracking-wider neon-text flex items-center gap-2">
+            <i class="fa-solid fa-eye"></i> KOLLISION VISION
+        </div>
+        
+        <!-- PWA Install Button (Hidden by default, shown via JS) -->
+        <button id="install-btn" class="hidden flex items-center gap-2 bg-teal-900/80 border border-teal-500 text-teal-300 px-4 py-2 rounded text-xs font-bold uppercase hover:bg-teal-800 transition install-pulse">
+            <i class="fa-solid fa-download"></i> Install App
+        </button>
+    </header>
 
     <!-- Main Content -->
-    <main class="text-center max-w-3xl px-6 w-full pt-20">
+    <main class="flex-grow flex flex-col items-center justify-start text-center px-4 z-10 relative pt-4">
         
-        <!-- The Big Headline -->
-        <h1 class="text-5xl md:text-7xl mb-2 hero-text">
-            KOLLISION
-        </h1>
-        <p class="text-xl md:text-2xl text-gray-300 mb-8 font-light">
-            Next-Gen Collision Avoidance System
-        </p>
-
-        <!-- The "Show, Don't Tell" Simulation -->
-        <div class="sim-screen">
-            <!-- Road Graphics -->
-            <div class="road">
-                <div class="road-line" style="animation-delay: 0s;"></div>
-                <div class="road-line" style="animation-delay: 0.2s;"></div>
-                <div class="road-line" style="animation-delay: 0.4s;"></div>
-                <div class="road-line" style="animation-delay: 0.6s;"></div>
+        <!-- Lidar Visualization -->
+        <div class="relative mb-6">
+            <canvas id="lidar-canvas" width="300" height="300"></canvas>
+            <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <div class="text-3xl font-black text-white">v2.0</div>
+                <div class="text-[10px] text-teal-600 font-bold animate-pulse mt-1">CALIBRATING SENSORS</div>
             </div>
+            <!-- Rotating Radar Line -->
+            <div class="absolute top-0 left-0 w-full h-full rounded-full border-t border-teal-500 opacity-50 animate-spin" style="animation-duration: 2s;"></div>
+        </div>
+
+        <!-- Active Modules List (The New Features) -->
+        <div class="w-full max-w-md space-y-3 mb-8 text-left">
+            <h3 class="text-xs text-gray-500 uppercase tracking-widest mb-2 pl-1">Active Modules</h3>
             
-            <!-- The Objects approaching (Alternating) -->
-            <div class="obstacle">🦌</div> <!-- Animal (Starts at 0s) -->
-            <div class="obstacle" style="animation-delay: 3s;">🚘</div> <!-- Car (Starts at 3s) -->
+            <!-- Lane Detector -->
+            <div class="module-card p-3 flex items-center justify-between rounded-r">
+                <div class="flex items-center gap-3">
+                    <div class="bg-teal-900/50 p-2 rounded text-teal-400"><i class="fa-solid fa-road"></i></div>
+                    <div>
+                        <div class="text-sm font-bold text-white">Smart Lane Detection</div>
+                        <div class="text-[10px] text-gray-400">Slope Filtering & Drift Alert</div>
+                    </div>
+                </div>
+                <span class="text-[10px] text-green-400 font-mono">ACTIVE</span>
+            </div>
 
-            <!-- The Critical Warning Overlay -->
-            <div class="warning-overlay">
-                <h2 class="text-3xl md:text-4xl font-black text-white drop-shadow-md tracking-tighter">COLLISION ALERT</h2>
-                <div class="bg-red-600 text-white font-bold px-4 py-1 mt-2 rounded shadow-lg animate-pulse">
-                    DRIVER INTERVENTION NEEDED
+            <!-- Drowsiness -->
+            <div class="module-card p-3 flex items-center justify-between rounded-r">
+                <div class="flex items-center gap-3">
+                    <div class="bg-teal-900/50 p-2 rounded text-teal-400"><i class="fa-solid fa-face-tired"></i></div>
+                    <div>
+                        <div class="text-sm font-bold text-white">Driver Monitoring</div>
+                        <div class="text-[10px] text-gray-400">MediaPipe Face Mesh (EAR)</div>
+                    </div>
                 </div>
-                <div class="mt-3 flex gap-4 text-sm font-mono font-bold text-red-200 bg-black/50 px-3 py-1 rounded">
-                    <span>TTC: 0.8s</span>
-                    <span>SPEED: 35 MPH</span>
+                <span class="text-[10px] text-green-400 font-mono">ACTIVE</span>
+            </div>
+
+            <!-- Black Box -->
+            <div class="module-card p-3 flex items-center justify-between rounded-r">
+                <div class="flex items-center gap-3">
+                    <div class="bg-teal-900/50 p-2 rounded text-teal-400"><i class="fa-solid fa-video"></i></div>
+                    <div>
+                        <div class="text-sm font-bold text-white">Black Box Recorder</div>
+                        <div class="text-[10px] text-gray-400">Auto-Save on Critical Event</div>
+                    </div>
                 </div>
+                <span class="text-[10px] text-green-400 font-mono">STANDBY</span>
+            </div>
+
+             <!-- TTC -->
+             <div class="module-card p-3 flex items-center justify-between rounded-r">
+                <div class="flex items-center gap-3">
+                    <div class="bg-teal-900/50 p-2 rounded text-teal-400"><i class="fa-solid fa-car-burst"></i></div>
+                    <div>
+                        <div class="text-sm font-bold text-white">Collision Warning</div>
+                        <div class="text-[10px] text-gray-400">YOLOv8 + Optical Expansion</div>
+                    </div>
+                </div>
+                <span class="text-[10px] text-green-400 font-mono">ACTIVE</span>
             </div>
         </div>
 
-        <!-- The Tech Specs -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-left">
-            <div class="card p-4 rounded-xl">
-                <div class="text-green-400 font-bold text-lg mb-1">🧠 YOLO Algorithms</div>
-                <p class="text-sm text-gray-400">Utilizes state-of-the-art **YOLOv8** computer vision for real-time object detection.</p>
-            </div>
-            <div class="card p-4 rounded-xl">
-                <div class="text-blue-400 font-bold text-lg mb-1">⚡ Relative Speed</div>
-                <p class="text-sm text-gray-400">Tracks pixel expansion rates to calculate the **Relative Velocity (MPH)** of threats.</p>
-            </div>
-            <div class="card p-4 rounded-xl">
-                <div class="text-red-400 font-bold text-lg mb-1">🛡️ TTC Algorithms</div>
-                <p class="text-sm text-gray-400">Predictive **Time-to-Collision (TTC)** logic triggers instant safety warnings.</p>
-            </div>
-        </div>
-
-        <!-- The Launch Button -->
-        <a href="app.html" class="glow-btn bg-blue-600 text-white font-bold py-4 px-12 rounded-full text-xl inline-flex items-center gap-2 w-full md:w-auto justify-center mb-10">
-            Launch Live System
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
+        <!-- Launch Button -->
+        <!-- Links to your main app.html -->
+        <a href="app.html" class="launch-btn px-12 py-4 text-xl inline-block relative group mb-8 shadow-[0_0_20px_rgba(0,255,204,0.4)]">
+            INITIALIZE SYSTEM
         </a>
 
     </main>
 
-    <footer class="absolute bottom-4 text-gray-500 text-xs w-full text-center">
-        &copy; 2024 Kollision Vision. Hosted on Render & GitHub.
+    <footer class="p-4 z-10 text-center border-t border-white/5 bg-black/80 backdrop-blur text-[10px] text-gray-600">
+        CLOUD-NATIVE EDGE COMPUTING // KOLLISION VISION
     </footer>
 
+    <script>
+        // --- PWA INSTALLATION LOGIC ---
+        let deferredPrompt;
+        const installBtn = document.getElementById('install-btn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent Chrome 67 and earlier from automatically showing the prompt
+            e.preventDefault();
+            // Stash the event so it can be triggered later.
+            deferredPrompt = e;
+            // Update UI to notify the user they can add to home screen
+            installBtn.classList.remove('hidden');
+        });
+
+        installBtn.addEventListener('click', (e) => {
+            // Hide our user interface that shows our A2HS button
+            installBtn.classList.add('hidden');
+            // Show the prompt
+            deferredPrompt.prompt();
+            // Wait for the user to respond to the prompt
+            deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('User accepted the A2HS prompt');
+                } else {
+                    console.log('User dismissed the A2HS prompt');
+                }
+                deferredPrompt = null;
+            });
+        });
+
+        // --- LIDAR SIMULATION SCRIPT ---
+        const canvas = document.getElementById('lidar-canvas');
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+        const center = width / 2;
+
+        // Generate random "points" (obstacles)
+        const points = [];
+        for(let i=0; i<30; i++) {
+            points.push({
+                angle: Math.random() * Math.PI * 2,
+                dist: Math.random() * (center - 10),
+                speed: 0.5 + Math.random()
+            });
+        }
+
+        function drawLidar() {
+            // Fade out effect
+            ctx.fillStyle = 'rgba(0, 20, 10, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw concentric circles
+            ctx.strokeStyle = 'rgba(0, 255, 204, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(center, center, 50, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(center, center, 100, 0, Math.PI*2); ctx.stroke();
+
+            // Update and draw points
+            ctx.fillStyle = '#00ffcc';
+            points.forEach(p => {
+                p.angle += 0.01 * p.speed;
+                const x = center + Math.cos(p.angle) * p.dist;
+                const y = center + Math.sin(p.angle) * p.dist;
+                
+                // Draw point
+                ctx.beginPath();
+                ctx.arc(x, y, 2, 0, Math.PI*2);
+                ctx.fill();
+            });
+
+            requestAnimationFrame(drawLidar);
+        }
+        drawLidar();
+    </script>
 </body>
 </html>
