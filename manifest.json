@@ -9,15 +9,15 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/2432/2432653.png",
+      "src": "data:image/svg+xml,%3Csvg xmlns='[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%230f172a'/%3E%3Cpath fill='%233b82f6' d='M256 32C114.6 32 0 125.1 0 240c0 47.6 19.9 91.2 52.9 126.3C38 405.7 7 439.5 6.5 440c-2.8 3.5-2.5 8.6 0.8 11.8S15.8 454.2 19 451c20.1-20.1 55.4-38.3 90.5-46.2c41.3 22.7 89.3 35.2 140.5 35.2c141.4 0 256-93.1 256-208S397.4 32 256 32z'/%3E%3C/svg%3E",
       "sizes": "192x192",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/2432/2432653.png",
+      "src": "data:image/svg+xml,%3Csvg xmlns='[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%230f172a'/%3E%3Cpath fill='%233b82f6' d='M256 32C114.6 32 0 125.1 0 240c0 47.6 19.9 91.2 52.9 126.3C38 405.7 7 439.5 6.5 440c-2.8 3.5-2.5 8.6 0.8 11.8S15.8 454.2 19 451c20.1-20.1 55.4-38.3 90.5-46.2c41.3 22.7 89.3 35.2 140.5 35.2c141.4 0 256-93.1 256-208S397.4 32 256 32z'/%3E%3C/svg%3E",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ]
