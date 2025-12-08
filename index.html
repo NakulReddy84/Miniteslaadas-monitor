@@ -14,172 +14,163 @@
 
     <style>
         body {
-            background-color: #050505;
-            color: #00ffcc; /* Cyan/Teal Cyberpunk look */
+            background-color: #111; /* Tesla Dark Mode */
+            color: #fff;
             font-family: 'JetBrains Mono', monospace;
-            overflow-x: hidden;
+            overflow: hidden;
         }
 
-        /* Moving Grid Background */
-        .perspective-grid {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: 
-                linear-gradient(rgba(5,5,5,1) 0%, rgba(5,5,5,0) 40%),
-                linear-gradient(90deg, rgba(0,255,204,0.1) 1px, transparent 1px),
-                linear-gradient(rgba(0,255,204,0.1) 1px, transparent 1px);
-            background-size: 100px 100px, 40px 40px, 40px 40px;
-            transform: perspective(500px) rotateX(60deg) translateY(-100px) translateZ(-200px);
-            animation: gridMove 2s linear infinite;
+        /* Background Canvas - The Simulation Layer */
+        #bg-canvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             z-index: -1;
-            opacity: 0.3;
-        }
-
-        @keyframes gridMove {
-            0% { background-position: 0 0, 0 0, 0 0; }
-            100% { background-position: 0 40px, 0 40px, 0 40px; }
+            /* Gradient mask to fade out the top so header text is readable */
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,1) 40%);
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,1) 40%);
         }
 
         /* The Lidar Canvas */
         #lidar-canvas {
             width: 280px; height: 280px;
             border-radius: 50%;
-            border: 2px solid rgba(0, 255, 204, 0.2);
-            background: radial-gradient(circle, rgba(0,20,10,1) 0%, rgba(0,0,0,1) 100%);
-            box-shadow: 0 0 30px rgba(0, 255, 204, 0.1);
+            border: 2px solid rgba(59, 130, 246, 0.2); /* Tesla Blue */
+            background: radial-gradient(circle, rgba(10, 20, 30, 1) 0%, rgba(0,0,0,1) 100%);
+            box-shadow: 0 0 40px rgba(59, 130, 246, 0.15);
             margin: 0 auto;
         }
 
-        /* Module Cards */
+        /* Module Cards - Glassmorphism */
         .module-card {
-            background: rgba(0, 20, 15, 0.6);
-            border: 1px solid rgba(0, 255, 204, 0.2);
-            border-left: 4px solid #00ffcc;
+            background: rgba(20, 20, 25, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-left: 4px solid #3b82f6; /* Tesla Blue */
             transition: all 0.3s ease;
+            backdrop-filter: blur(8px);
         }
         .module-card:hover {
             transform: translateX(5px);
-            background: rgba(0, 255, 204, 0.1);
-            box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);
+            background: rgba(40, 40, 50, 0.9);
+            border-color: #60a5fa;
         }
 
         /* Launch Button */
         .launch-btn {
-            background: #00ffcc; color: #000;
+            background: #3b82f6; color: #fff;
             text-transform: uppercase; font-weight: 800; letter-spacing: 2px;
             transition: all 0.3s;
-            clip-path: polygon(10% 0, 100% 0, 100% 70%, 90% 100%, 0 100%, 0 30%);
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.4);
         }
         .launch-btn:hover {
-            background: #fff; box-shadow: 0 0 30px #00ffcc;
+            background: #60a5fa; 
             transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(59, 130, 246, 0.6);
         }
         
-        .neon-text { text-shadow: 0 0 10px rgba(0, 255, 204, 0.7); }
+        .neon-text { text-shadow: 0 0 15px rgba(59, 130, 246, 0.6); }
 
         /* PWA Install Button Animation */
-        .install-pulse { animation: pulse-green 2s infinite; }
-        @keyframes pulse-green {
-            0% { box-shadow: 0 0 0 0 rgba(0, 255, 204, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(0, 255, 204, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(0, 255, 204, 0); }
+        .install-pulse { animation: pulse-blue 2s infinite; }
+        @keyframes pulse-blue {
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
         }
     </style>
 </head>
 <body class="flex flex-col min-h-screen">
 
-    <!-- Visual Effects -->
-    <div class="perspective-grid"></div>
+    <!-- NEW: Live Autopilot Simulation Background -->
+    <canvas id="bg-canvas"></canvas>
 
     <!-- Header -->
     <header class="p-6 flex justify-between items-center z-10">
         <div class="text-xl font-bold tracking-wider neon-text flex items-center gap-2">
-            <i class="fa-solid fa-eye"></i> KOLLISION VISION
+            <i class="fa-solid fa-robot text-blue-500"></i> KOLLISION VISION
         </div>
         
         <!-- PWA Install Button (Hidden by default, shown via JS) -->
-        <button id="install-btn" class="hidden flex items-center gap-2 bg-teal-900/80 border border-teal-500 text-teal-300 px-4 py-2 rounded text-xs font-bold uppercase hover:bg-teal-800 transition install-pulse">
+        <button id="install-btn" class="hidden flex items-center gap-2 bg-blue-900/80 border border-blue-500 text-blue-200 px-4 py-2 rounded text-xs font-bold uppercase hover:bg-blue-800 transition install-pulse">
             <i class="fa-solid fa-download"></i> Install App
         </button>
     </header>
 
     <!-- Main Content -->
-    <main class="flex-grow flex flex-col items-center justify-start text-center px-4 z-10 relative pt-4">
+    <main class="flex-grow flex flex-col items-center justify-start text-center px-4 z-10 relative pt-4 overflow-y-auto">
         
         <!-- Lidar Visualization -->
-        <div class="relative mb-6">
+        <div class="relative mb-6 shrink-0">
             <canvas id="lidar-canvas" width="300" height="300"></canvas>
             <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <div class="text-3xl font-black text-white">v2.0</div>
-                <div class="text-[10px] text-teal-600 font-bold animate-pulse mt-1">CALIBRATING SENSORS</div>
+                <div class="text-[10px] text-blue-400 font-bold animate-pulse mt-1">AI SENTINEL STANDBY</div>
             </div>
             <!-- Rotating Radar Line -->
-            <div class="absolute top-0 left-0 w-full h-full rounded-full border-t border-teal-500 opacity-50 animate-spin" style="animation-duration: 2s;"></div>
+            <div class="absolute top-0 left-0 w-full h-full rounded-full border-t-2 border-blue-500 opacity-60 animate-spin" style="animation-duration: 1.5s;"></div>
         </div>
 
         <!-- Active Modules List (The New Features) -->
-        <div class="w-full max-w-md space-y-3 mb-8 text-left">
-            <h3 class="text-xs text-gray-500 uppercase tracking-widest mb-2 pl-1">Active Modules</h3>
+        <div class="w-full max-w-md space-y-3 mb-8 text-left shrink-0">
+            <h3 class="text-xs text-gray-500 uppercase tracking-widest mb-2 pl-1 shadow-black drop-shadow-md">Active Safety Modules</h3>
             
             <!-- Lane Detector -->
             <div class="module-card p-3 flex items-center justify-between rounded-r">
                 <div class="flex items-center gap-3">
-                    <div class="bg-teal-900/50 p-2 rounded text-teal-400"><i class="fa-solid fa-road"></i></div>
+                    <div class="bg-blue-900/30 p-2 rounded text-blue-400"><i class="fa-solid fa-road"></i></div>
                     <div>
-                        <div class="text-sm font-bold text-white">Smart Lane Detection</div>
+                        <div class="text-sm font-bold text-white">Lane Departure Warning</div>
                         <div class="text-[10px] text-gray-400">Slope Filtering & Drift Alert</div>
                     </div>
                 </div>
-                <span class="text-[10px] text-green-400 font-mono">ACTIVE</span>
+                <span class="text-[10px] text-green-400 font-mono">READY</span>
             </div>
 
             <!-- Drowsiness -->
             <div class="module-card p-3 flex items-center justify-between rounded-r">
                 <div class="flex items-center gap-3">
-                    <div class="bg-teal-900/50 p-2 rounded text-teal-400"><i class="fa-solid fa-face-tired"></i></div>
+                    <div class="bg-blue-900/30 p-2 rounded text-blue-400"><i class="fa-solid fa-eye"></i></div>
                     <div>
                         <div class="text-sm font-bold text-white">Driver Monitoring</div>
-                        <div class="text-[10px] text-gray-400">MediaPipe Face Mesh (EAR)</div>
+                        <div class="text-[10px] text-gray-400">Attention Tracking (EAR)</div>
                     </div>
                 </div>
-                <span class="text-[10px] text-green-400 font-mono">ACTIVE</span>
+                <span class="text-[10px] text-green-400 font-mono">READY</span>
             </div>
 
             <!-- Black Box -->
             <div class="module-card p-3 flex items-center justify-between rounded-r">
                 <div class="flex items-center gap-3">
-                    <div class="bg-teal-900/50 p-2 rounded text-teal-400"><i class="fa-solid fa-video"></i></div>
+                    <div class="bg-blue-900/30 p-2 rounded text-blue-400"><i class="fa-solid fa-video"></i></div>
                     <div>
                         <div class="text-sm font-bold text-white">Black Box Recorder</div>
-                        <div class="text-[10px] text-gray-400">Auto-Save on Critical Event</div>
+                        <div class="text-[10px] text-gray-400">Auto-Recording on Critical Events</div>
                     </div>
                 </div>
-                <span class="text-[10px] text-green-400 font-mono">STANDBY</span>
+                <span class="text-[10px] text-gray-500 font-mono">STANDBY</span>
             </div>
 
              <!-- TTC -->
              <div class="module-card p-3 flex items-center justify-between rounded-r">
                 <div class="flex items-center gap-3">
-                    <div class="bg-teal-900/50 p-2 rounded text-teal-400"><i class="fa-solid fa-car-burst"></i></div>
+                    <div class="bg-blue-900/30 p-2 rounded text-blue-400"><i class="fa-solid fa-shield-halved"></i></div>
                     <div>
-                        <div class="text-sm font-bold text-white">Collision Warning</div>
+                        <div class="text-sm font-bold text-white">Forward Collision Warning</div>
                         <div class="text-[10px] text-gray-400">YOLOv8 + Optical Expansion</div>
                     </div>
                 </div>
-                <span class="text-[10px] text-green-400 font-mono">ACTIVE</span>
+                <span class="text-[10px] text-green-400 font-mono">READY</span>
             </div>
         </div>
 
         <!-- Launch Button -->
-        <!-- Links to your main app.html -->
-        <a href="app.html" class="launch-btn px-12 py-4 text-xl inline-block relative group mb-8 shadow-[0_0_20px_rgba(0,255,204,0.4)]">
-            INITIALIZE SYSTEM
+        <a href="app.html" class="launch-btn px-12 py-4 text-xl inline-block relative group mb-8">
+            ENGAGE SYSTEM
         </a>
 
     </main>
 
-    <footer class="p-4 z-10 text-center border-t border-white/5 bg-black/80 backdrop-blur text-[10px] text-gray-600">
-        CLOUD-NATIVE EDGE COMPUTING // KOLLISION VISION
+    <footer class="p-4 z-10 text-center border-t border-white/5 bg-black/80 backdrop-blur text-[10px] text-gray-500">
+        KOLLISION VISION // CLOUD-NATIVE EDGE AI
     </footer>
 
     <script>
@@ -188,38 +179,170 @@
         const installBtn = document.getElementById('install-btn');
 
         window.addEventListener('beforeinstallprompt', (e) => {
-            // Prevent Chrome 67 and earlier from automatically showing the prompt
             e.preventDefault();
-            // Stash the event so it can be triggered later.
             deferredPrompt = e;
-            // Update UI to notify the user they can add to home screen
             installBtn.classList.remove('hidden');
         });
 
         installBtn.addEventListener('click', (e) => {
-            // Hide our user interface that shows our A2HS button
             installBtn.classList.add('hidden');
-            // Show the prompt
             deferredPrompt.prompt();
-            // Wait for the user to respond to the prompt
             deferredPrompt.userChoice.then((choiceResult) => {
-                if (choiceResult.outcome === 'accepted') {
-                    console.log('User accepted the A2HS prompt');
-                } else {
-                    console.log('User dismissed the A2HS prompt');
-                }
                 deferredPrompt = null;
             });
         });
 
-        // --- LIDAR SIMULATION SCRIPT ---
-        const canvas = document.getElementById('lidar-canvas');
-        const ctx = canvas.getContext('2d');
-        const width = canvas.width;
-        const height = canvas.height;
+        // --- BACKGROUND AUTOPILOT SIMULATION ---
+        const bgCanvas = document.getElementById('bg-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        let bgW, bgH;
+
+        function resizeBg() {
+            bgW = window.innerWidth;
+            bgH = window.innerHeight;
+            bgCanvas.width = bgW;
+            bgCanvas.height = bgH;
+        }
+        window.addEventListener('resize', resizeBg);
+        resizeBg();
+
+        // Simulation Variables
+        let offset = 0;
+        let curve = 0;
+        let targetCurve = 0;
+        
+        // Mock Traffic Data (Z = distance, X = lane position)
+        const traffic = [
+            { x: -0.5, z: 100, speed: 0.8 }, // Left lane
+            { x: 0.5, z: 300, speed: 0.6 },  // Right lane
+            { x: 0, z: 600, speed: 0.9 }     // Far center
+        ];
+
+        function drawAutopilotSim() {
+            bgCtx.clearRect(0, 0, bgW, bgH);
+            
+            // Draw Sky/Horizon
+            const gradient = bgCtx.createLinearGradient(0, 0, 0, bgH);
+            gradient.addColorStop(0, '#0f172a');
+            gradient.addColorStop(0.4, '#1e293b'); // Horizon
+            gradient.addColorStop(1, '#000000'); // Road
+            bgCtx.fillStyle = gradient;
+            bgCtx.fillRect(0, 0, bgW, bgH);
+
+            const cx = bgW / 2;
+            const cy = bgH * 0.35; // Horizon height
+            
+            // Animate road curve gently
+            if (Math.random() < 0.01) targetCurve = (Math.random() - 0.5) * 2;
+            curve += (targetCurve - curve) * 0.01;
+
+            // Move forward
+            offset += 8;
+            if (offset > 100) offset = 0;
+
+            const maxZ = 1200;
+            const laneWidth = 600; 
+
+            // 3D Projection Helper
+            function project(x, z) {
+                const scale = 300 / (z + 100);
+                const x2d = cx + (x + curve * (z/maxZ)**2) * scale * laneWidth;
+                const y2d = cy + scale * 300; // Camera height
+                return { x: x2d, y: y2d, scale: scale };
+            }
+
+            // Draw Road Lanes
+            bgCtx.lineWidth = 2;
+            
+            // Dashed Center Lines
+            bgCtx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            for (let z = 0; z < maxZ; z += 100) {
+                let p1 = project(0, z - offset);
+                let p2 = project(0, z - offset + 40);
+                if (p1.y > bgH) continue;
+                bgCtx.beginPath();
+                bgCtx.moveTo(p1.x, p1.y);
+                bgCtx.lineTo(p2.x, p2.y);
+                bgCtx.stroke();
+            }
+
+            // Solid Lane Markers (The "Smart Lane Detector" Visual)
+            bgCtx.strokeStyle = '#3b82f6'; // Blue
+            bgCtx.shadowBlur = 15;
+            bgCtx.shadowColor = '#3b82f6';
+            bgCtx.lineWidth = 3;
+            
+            // Left Lane
+            bgCtx.beginPath();
+            for(let z=0; z<maxZ; z+=20) {
+                let p = project(-0.8, z);
+                if(z===0) bgCtx.moveTo(p.x, p.y); else bgCtx.lineTo(p.x, p.y);
+            }
+            bgCtx.stroke();
+
+            // Right Lane
+            bgCtx.beginPath();
+            for(let z=0; z<maxZ; z+=20) {
+                let p = project(0.8, z);
+                if(z===0) bgCtx.moveTo(p.x, p.y); else bgCtx.lineTo(p.x, p.y);
+            }
+            bgCtx.stroke();
+            bgCtx.shadowBlur = 0; // Reset glow
+
+            // Draw Traffic (Simulating Object Detection)
+            bgCtx.fillStyle = '#1e293b';
+            bgCtx.strokeStyle = '#60a5fa'; // Light Blue Bounding Box
+            bgCtx.lineWidth = 1;
+
+            traffic.forEach(car => {
+                car.z -= car.speed * 6; // Relative speed
+                if (car.z < 20) {
+                    car.z = 1000; 
+                    car.x = (Math.random() - 0.5) * 1.5;
+                }
+
+                const p = project(car.x, car.z);
+                const size = 150 * p.scale;
+                
+                // Draw "Ghost Car" Box
+                // Fill
+                bgCtx.fillStyle = 'rgba(30, 41, 59, 0.8)';
+                bgCtx.fillRect(p.x - size/2, p.y - size, size, size * 0.6);
+                
+                // Bounding Box Stroke
+                bgCtx.strokeRect(p.x - size/2, p.y - size, size, size * 0.6);
+                
+                // Distance Text
+                bgCtx.fillStyle = '#fff';
+                bgCtx.font = `${Math.max(8, 20*p.scale)}px monospace`;
+                bgCtx.fillText(`${Math.round(car.z/10)}m`, p.x - size/2, p.y - size - 5);
+            });
+
+            // Draw Ego Vehicle (Dashboard View)
+            const hoodY = bgH;
+            const hoodW = bgW * 0.6;
+            bgCtx.fillStyle = '#0f172a'; // Dark hood
+            bgCtx.beginPath();
+            bgCtx.moveTo(cx - hoodW/2, hoodY);
+            bgCtx.quadraticCurveTo(cx, hoodY - 100, cx + hoodW/2, hoodY);
+            bgCtx.fill();
+            
+            // Dashboard Line
+            bgCtx.strokeStyle = '#334155';
+            bgCtx.lineWidth = 2;
+            bgCtx.stroke();
+
+            requestAnimationFrame(drawAutopilotSim);
+        }
+        drawAutopilotSim();
+
+        // --- LIDAR CIRCLE SCRIPT (Header Widget) ---
+        const lidarCanvas = document.getElementById('lidar-canvas');
+        const ctx = lidarCanvas.getContext('2d');
+        const width = lidarCanvas.width;
+        const height = lidarCanvas.height;
         const center = width / 2;
 
-        // Generate random "points" (obstacles)
         const points = [];
         for(let i=0; i<30; i++) {
             points.push({
@@ -229,33 +352,25 @@
             });
         }
 
-        function drawLidar() {
-            // Fade out effect
-            ctx.fillStyle = 'rgba(0, 20, 10, 0.1)';
+        function drawLidarWidget() {
+            ctx.fillStyle = 'rgba(10, 20, 30, 0.1)';
             ctx.fillRect(0, 0, width, height);
 
-            // Draw concentric circles
-            ctx.strokeStyle = 'rgba(0, 255, 204, 0.1)';
+            ctx.strokeStyle = 'rgba(59, 130, 246, 0.1)';
             ctx.lineWidth = 1;
             ctx.beginPath(); ctx.arc(center, center, 50, 0, Math.PI*2); ctx.stroke();
             ctx.beginPath(); ctx.arc(center, center, 100, 0, Math.PI*2); ctx.stroke();
 
-            // Update and draw points
-            ctx.fillStyle = '#00ffcc';
+            ctx.fillStyle = '#3b82f6';
             points.forEach(p => {
                 p.angle += 0.01 * p.speed;
                 const x = center + Math.cos(p.angle) * p.dist;
                 const y = center + Math.sin(p.angle) * p.dist;
-                
-                // Draw point
-                ctx.beginPath();
-                ctx.arc(x, y, 2, 0, Math.PI*2);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI*2); ctx.fill();
             });
-
-            requestAnimationFrame(drawLidar);
+            requestAnimationFrame(drawLidarWidget);
         }
-        drawLidar();
+        drawLidarWidget();
     </script>
 </body>
 </html>
