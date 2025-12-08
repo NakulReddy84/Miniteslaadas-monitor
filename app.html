@@ -9,26 +9,29 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     
+    <!-- SECURITY: Force HTTPS (Required for Camera) -->
+    <script>
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+            location.replace(`https:${location.href.substring(location.protocol.length)}`);
+        }
+    </script>
+    
     <!-- 1. UI & Audio -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     
     <!-- 2. AI Engines (Local) -->
-    <!-- YOLO Engine -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     
-    <!-- Lane Detection Engine (Async Load - No onload to prevent errors) -->
+    <!-- FIX: Removed 'onload' to prevent ReferenceError. We use polling in JS instead. -->
     <script async src="https://docs.opencv.org/4.8.0/opencv.js" type="text/javascript"></script>
     
-    <!-- Drowsiness Engine (MediaPipe) -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
     <style>
         body { background-color: #1f2937; color: #f3f4f6; font-family: 'Inter', sans-serif; }
         .container { max-width: 1200px; margin: auto; padding: 2rem; }
-        
-        /* Monitor Area: 4:3 Aspect Ratio */
         .monitor-area { 
             position: relative; background-color: #0f172a; border-radius: 1rem; overflow: hidden; 
             aspect-ratio: 4/3; display: flex; justify-content: center; align-items: center; border: 1px solid #374151;
@@ -39,7 +42,7 @@
         
         .status-box { background-color: #374151; border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 1rem; }
         
-        /* Overlay Alerts */
+        /* Alerts */
         #risk-message {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             padding: 1rem 2rem; border-radius: 1rem; font-size: 2.5rem; font-weight: 900;
@@ -49,7 +52,6 @@
         .risk-warning { color: #fcd34d; border: 5px solid #d97706; background-color: rgba(251, 191, 36, 0.3); }
         .risk-critical { color: #fee2e2; border: 8px solid #b91c1c; background-color: rgba(239, 68, 68, 0.7); }
         
-        /* Recording Dot */
         #rec_indicator {
             position: absolute; top: 20px; right: 20px;
             background-color: rgba(239, 68, 68, 0.9); color: white;
@@ -58,7 +60,6 @@
         }
         .rec-dot { width: 8px; height: 8px; background: white; border-radius: 50%; animation: blink 1s infinite; }
         
-        /* Mode Buttons */
         .mode-btn { background: #374151; padding: 8px; border-radius: 6px; font-size: 12px; font-weight: bold; width: 48%; transition: background 0.2s; }
         .mode-btn:hover { background: #4b5563; }
         .mode-active { background: #3b82f6 !important; color: white; }
@@ -72,20 +73,17 @@
 <body>
 
 <div class="container flex flex-col lg:flex-row gap-8">
-    
-    <!-- LEFT: Main Camera View -->
     <div class="lg:w-3/4 monitor-area" id="monitor-container">
-        <video id="video-feed" autoplay playsinline></video>
+        <!-- Added muted/playsinline to ensure autoplay works on mobile -->
+        <video id="video-feed" autoplay playsinline muted></video>
         <canvas id="canvas-feed" width="640" height="480"></canvas>
         <div id="risk-message" class="transition-all duration-300"></div>
         <div id="rec_indicator"><div class="rec-dot"></div> REC EVIDENCE</div>
     </div>
     
-    <!-- RIGHT: Control Sidebar -->
     <div class="lg:w-1/4 flex flex-col gap-4">
         <h1 class="text-3xl font-extrabold text-blue-400 mb-2">KAIROS Hybrid</h1>
         
-        <!-- Mode Switcher -->
         <div class="flex justify-between mb-2">
             <button id="btn-road" class="mode-btn active" onclick="window.switchMode('road')">🛣️ ROAD</button>
             <button id="btn-driver" class="mode-btn" onclick="window.switchMode('driver')">😴 DRIVER</button>
@@ -124,24 +122,22 @@
             </div>
         </div>
 
-        <!-- Configuration Panel (Firebase Linked) -->
         <div class="status-box">
             <h2 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Configuration</h2>
             <div class="space-y-2">
                 <div class="flex justify-between items-center">
                     <label class="text-sm text-red-300">Critical (s)</label>
-                    <input type="number" id="critical-input" value="1.5" step="0.1" class="w-16 bg-gray-900 text-white p-1 rounded text-right border border-gray-600">
+                    <input type="number" id="critical-input" value="5.0" step="0.5" class="w-16 bg-gray-900 text-white p-1 rounded text-right border border-gray-600">
                 </div>
                 <div class="flex justify-between items-center">
                     <label class="text-sm text-yellow-300">Warning (s)</label>
-                    <input type="number" id="warning-input" value="3.0" step="0.1" class="w-16 bg-gray-900 text-white p-1 rounded text-right border border-gray-600">
+                    <input type="number" id="warning-input" value="10.0" step="0.5" class="w-16 bg-gray-900 text-white p-1 rounded text-right border border-gray-600">
                 </div>
             </div>
             <button id="save-settings-btn" class="w-full mt-3 bg-gray-700 hover:bg-gray-600 text-white text-sm font-bold py-2 rounded transition">Update Thresholds</button>
             <p id="save-status-msg" class="text-[10px] text-gray-500 mt-1 text-center">Settings loaded from Cloud.</p>
         </div>
         
-        <!-- Controls -->
         <div class="mt-auto flex flex-col gap-2">
             <button id="start-button" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition mb-2 disabled:opacity-50" disabled>Loading AI...</button>
             <button id="stop-button" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow transition disabled:opacity-50" disabled>Stop</button>
@@ -179,14 +175,12 @@
     let audioCtx = null;
     let firebaseReady = false, db, auth, userId;
     
-    // AI Buffers
     const float32Data = new Float32Array(3 * YOLO_SIZE * YOLO_SIZE);
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = YOLO_SIZE; tempCanvas.height = YOLO_SIZE;
     const tempCtx = tempCanvas.getContext('2d');
     let scaleFactor=1, xOffset=0, yOffset=0;
 
-    // Persistent State
     let lastDetections = [];
     let animationFrameId = null;
     let frameCount = 0;
@@ -386,7 +380,7 @@
         }
     }
 
-    // --- YOLO HELPERS ---
+    // --- YOLO PREPROCESS ---
     function preprocess(ctx) {
         // Letterboxing
         scaleFactor = Math.min(YOLO_SIZE / vw, YOLO_SIZE / vh);
@@ -479,6 +473,7 @@
         if (!isProcessing && (now - lastTime > (1000 / TARGET_FPS))) {
             isProcessing = true; lastTime = now;
             try {
+                // FIX: Use actual video dimensions
                 const inputTensor = preprocess(video, video.videoWidth, video.videoHeight);
                 const feeds = {};
                 feeds[session.inputNames[0]] = inputTensor;
