@@ -85,7 +85,8 @@
         <h1 class="text-3xl font-extrabold text-blue-400 mb-2">KAIROS Hybrid</h1>
         
         <div class="flex justify-between mb-2">
-            <button id="btn-road" class="mode-btn active" onclick="window.switchMode('road')">🛣️ ROAD</button>
+            <!-- FIXED: Added 'mode-active' class to match CSS and fixed IDs to match JS -->
+            <button id="btn-road" class="mode-btn mode-active" onclick="window.switchMode('road')">🛣️ ROAD</button>
             <button id="btn-driver" class="mode-btn" onclick="window.switchMode('driver')">😴 DRIVER</button>
         </div>
 
@@ -220,6 +221,7 @@
         }
         start() {
             if (this.isRecording || this.cooldown) return;
+            // Access global canvas
             const stream = canvas.captureStream(30);
             try { this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' }); } 
             catch (e) { return; } 
@@ -381,7 +383,7 @@
     }
 
     // --- YOLO PREPROCESS ---
-    function preprocess(ctx) {
+    function preprocess(ctx, vw, vh) {
         // Letterboxing
         scaleFactor = Math.min(YOLO_SIZE / vw, YOLO_SIZE / vh);
         const newWidth = vw * scaleFactor;
@@ -391,13 +393,13 @@
 
         tempCtx.fillStyle = "black";
         tempCtx.fillRect(0, 0, YOLO_SIZE, YOLO_SIZE);
-        tempCtx.drawImage(sourceVideo, xOffset, yOffset, newWidth, newHeight);
+        tempCtx.drawImage(video, xOffset, yOffset, newWidth, newHeight);
 
         const imageData = tempCtx.getImageData(0, 0, YOLO_SIZE, YOLO_SIZE);
         const { data } = imageData;
         const totalPixels = YOLO_SIZE * YOLO_SIZE;
         for (let i = 0; i < totalPixels; i++) {
-            float32Data[i] = data[i * 4] / 255.0;                     
+            float32Data[i] = data[i * 4] / 255.0;                      
             float32Data[i + totalPixels] = data[i * 4 + 1] / 255.0;   
             float32Data[i + 2 * totalPixels] = data[i * 4 + 2] / 255.0; 
         }
@@ -565,10 +567,11 @@
     }
 
     // --- SWITCH MODES ---
+    // FIXED: Updated IDs from underscores to hyphens and used 'mode-active' class
     window.switchMode = async function(mode) {
         currentMode = mode;
-        document.getElementById('btn_road').className = mode === 'road' ? 'mode-btn active' : 'mode-btn';
-        document.getElementById('btn_driver').className = mode === 'driver' ? 'mode-btn active' : 'mode-btn';
+        document.getElementById('btn-road').className = mode === 'road' ? 'mode-btn mode-active' : 'mode-btn';
+        document.getElementById('btn-driver').className = mode === 'driver' ? 'mode-btn mode-active' : 'mode-btn';
         const constraints = { video: { width: DISPLAY_W, height: DISPLAY_H, facingMode: mode === 'road' ? 'environment' : 'user' } };
         if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
